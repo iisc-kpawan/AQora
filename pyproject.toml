@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aqa-arena"
+version = "0.1.0"
+description = "AQora: deterministic conversational analytics for global air-quality data"
+requires-python = ">=3.11"
+dependencies = [
+  "duckdb>=1.2",
+  "fastapi>=0.115",
+  "httpx>=0.28",
+  "numpy>=2.0",
+  "pandas>=2.2",
+  "pydantic>=2.10",
+  "PyYAML>=6.0",
+  "statsmodels>=0.14",
+  "uvicorn[standard]>=0.34",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "pytest-cov>=6.0"]
+
+[project.scripts]
+aqa = "aqa.cli:main"
+aqa-serve = "aqa.api:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+aqa = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = ["integration: tests that use the copied historical corpus"]

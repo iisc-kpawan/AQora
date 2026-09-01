@@ -1,0 +1,301 @@
+question
+List all pollutants available for India in the frozen AQA snapshot.
+How many monitoring stations are available for PM2.5 in India?
+What is the earliest and latest timestamp available for CPCB data?
+List the countries in AQA that contain O3 observations.
+How many PM10 station–pollutant series are available for the United States?
+Which source network provides the United Kingdom observations in AQA?
+What was the mean PM2.5 concentration in India on 27 August 2026?
+What was the median PM10 concentration in China during July 2026?
+What was the maximum NO2 concentration in the United Kingdom during July 2026?
+What was the 95th percentile O3 concentration in the United States during July 2026?
+What was the minimum SO2 concentration in Germany during July 2026?
+What was the standard deviation of daily PM2.5 in Mexico during July 2026?
+Compare the mean PM2.5 concentrations of India and China during July 2026.
+Compare the median PM10 concentrations of the United States and Mexico during July 2026.
+Which had higher mean NO2 in July 2026: the United Kingdom or Germany?
+Compare mean O3 concentrations in France and Germany during July 2026.
+Compare mean CO concentrations in China and South Korea during July 2026.
+Compare the maximum daily PM2.5 values in India and the United States during July 2026.
+"Rank India, China, the United States, the United Kingdom, France, Germany, and Mexico by mean PM2.5 during July 2026."
+List the five countries with the highest mean PM10 during July 2026.
+List the five countries with the lowest mean NO2 during July 2026.
+Rank the seven primary AQA countries by median O3 during July 2026.
+Which country had the highest daily maximum SO2 during July 2026?
+List the top five countries by 95th-percentile PM2.5 during July 2026.
+Show the daily mean PM2.5 trend for India during July 2026.
+What was the weekly mean PM2.5 in India for each week of July 2026?
+Show the monthly mean NO2 for Germany from January through July 2026.
+Did mean PM10 in Mexico increase or decrease from June to July 2026?
+What was the day-of-week profile of PM2.5 in the United Kingdom during July 2026?
+What was the hour-of-day profile of NO2 in China during July 2026?
+Calculate the daily AQI for Delhi on 27 August 2026 using the India CPCB standard.
+What AQI category did Delhi fall into on 27 August 2026 under the CPCB standard?
+How many days in July 2026 exceeded the configured daily PM2.5 guideline in Delhi?
+What was the maximum daily AQI in Delhi during July 2026 using the CPCB standard?
+"How many Good, Satisfactory, Moderate, Poor, Very Poor, and Severe AQI days occurred in Delhi during July 2026?"
+Was Delhi's daily PM2.5 on 27 August 2026 above or below the configured WHO guideline?
+What percentage of expected PM2.5 observations were available for India on 27 August 2026?
+How many PM2.5 observations in India were flagged as imputed on 27 August 2026?
+What was the data coverage for CPCB on 27 August 2026?
+Which pollutant had the highest missing-data percentage in India during July 2026?
+What was the longest PM2.5 gap observed in India during July 2026?
+"Report observed, missing, and imputed PM2.5 counts for India during July 2026."
+Plot the daily mean PM2.5 concentration in India during July 2026 as a line chart.
+"Create a bar chart comparing mean PM2.5 across India, China, the United States, the United Kingdom, France, Germany, and Mexico for July 2026."
+Create a box plot of daily PM2.5 concentrations in India during July 2026.
+Create a histogram of hourly NO2 concentrations in Germany during July 2026.
+Create a density plot of daily O3 concentrations in the United States during July 2026.
+Create an hour-of-day heatmap of PM2.5 in China during July 2026.
+Report India's mean PM2.5 for July 2026 and show the daily trend as a line chart.
+Compare India and China by mean PM2.5 in July 2026 and present the result as a table and bar chart.
+List the five countries with the highest mean PM2.5 in July 2026 and show their values in a ranked table.
+"Report India's July 2026 PM2.5 mean, median, P95, and data coverage in a formatted summary."
+Show the daily PM2.5 trend for Germany in July 2026 and include a data-quality note.
+Calculate Delhi's CPCB AQI for 27 August 2026 and present the AQI category with the underlying pollutant values.
+"Using data available through 20 August 2026 23:00 UTC, forecast Delhi PM2.5 for the next 6 hours."
+"Using data available through 20 August 2026 23:00 UTC, forecast Beijing PM2.5 for the next 24 hours."
+Forecast London NO2 for the 12 hours following 20 August 2026 23:00 UTC.
+Forecast Mexico City O3 for the 24 hours following 20 August 2026 23:00 UTC.
+Forecast Bengaluru PM2.5 for the 24 hours following 20 August 2026 23:00 UTC and return prediction intervals if supported.
+Report which forecasting model is selected by the system for Delhi PM2.5 at a 24-hour horizon using data through 20 August 2026.
+List all countries that have complete coverage for all six AQA pollutants and report the number of stations in each.
+"For India and China, report the number of stations available for each of the six pollutants."
+Identify all source networks contributing PM2.5 data and report their date ranges.
+"For France, Germany, and the United Kingdom, list the available pollutants and monitoring-site counts."
+Find the five countries with the greatest number of total monitoring sites and report their source networks.
+Report the number of station–pollutant series and monitoring sites for each of the seven primary AQA networks.
+"For India, calculate mean, median, standard deviation, P90, P95, and maximum PM2.5 during July 2026."
+Calculate monthly mean PM2.5 for China for each month from February through July 2026.
+"For the United States, report the mean and P95 of daily O3 during May, June, and July 2026."
+Calculate mean PM10 for France and Germany separately for June and July 2026.
+Report the monthly median NO2 and interquartile range for the United Kingdom from February through July 2026.
+"For Mexico, calculate mean, median, and maximum daily SO2 during the last three complete months."
+"Compare mean PM2.5 in India, China, and the United States during July 2026 and report pairwise absolute differences."
+Compare the monthly mean PM2.5 trajectories of India and China from February through July 2026.
+"Compare median NO2 and P95 NO2 across France, Germany, and the United Kingdom during July 2026."
+Compare weekday and weekend mean PM2.5 in India and Mexico during July 2026.
+Compare daytime versus nighttime O3 in the United States and France during July 2026.
+"Compare PM2.5 in Delhi and Bengaluru during July 2026 using mean, median, and P95."
+Rank all available countries by mean PM2.5 during July 2026 and return the top 10.
+Rank all available countries by mean PM10 during the last three complete months and return the top 10.
+Rank the seven primary AQA countries by percentage of days exceeding the configured PM2.5 guideline in July 2026.
+List the 10 countries with the highest P95 NO2 during July 2026.
+Rank countries by PM2.5 data completeness during July 2026 and return the top and bottom five.
+List the 10 cities with the highest mean PM2.5 during July 2026.
+Calculate month-over-month percentage change in mean PM2.5 for India from February through July 2026.
+Compare the January–July 2026 PM2.5 trend slopes for India and China.
+Show the average hour-of-day PM2.5 profile for Delhi and Bengaluru during July 2026.
+Compare weekday and weekend PM10 temporal profiles in Mexico during July 2026.
+Calculate a 7-day moving average of daily PM2.5 for Germany during June and July 2026.
+Identify the day in July 2026 with the highest country-level mean PM2.5 for India.
+Compare the number of CPCB AQI category days for Delhi and Bengaluru during July 2026.
+"For Delhi, calculate the percentage of valid July 2026 days in each CPCB AQI category."
+"Rank Delhi, Bengaluru, Mumbai, Chennai, and Kolkata by the number of PM2.5 guideline-exceedance days in July 2026."
+Compare maximum daily AQI for Delhi and Bengaluru during June and July 2026.
+"For the United States, count station-days exceeding the configured O3 standard during July 2026."
+Compare the number and percentage of PM2.5 exceedance days in India and China during July 2026 using the same configured concentration guideline.
+"Compare PM2.5 coverage across India, China, and the United States during July 2026."
+List the 10 countries with the highest PM2.5 missing-data percentage during July 2026.
+"For India, compare observed versus imputed PM2.5 fractions for June and July 2026."
+Identify the five Indian cities with the lowest PM2.5 data coverage during July 2026.
+Compare the distribution of hourly gap lengths for PM2.5 in India and China during July 2026.
+Report the percentage of station-days meeting the configured minimum coverage threshold in each of the seven primary AQA countries during July 2026.
+"Plot monthly mean PM2.5 for India, China, and the United States from February through July 2026 as a multi-line chart."
+Create a horizontal bar chart of the 10 countries with the highest mean PM2.5 during July 2026.
+"Create side-by-side box plots of daily PM2.5 for India, China, and the United States during July 2026."
+"Create a violin plot comparing daily NO2 distributions in France, Germany, and the United Kingdom during July 2026."
+"Create a correlation heatmap for PM2.5, PM10, NO2, O3, CO, and SO2 in China during July 2026."
+Create a day-of-week by hour-of-day heatmap for PM2.5 in Delhi during July 2026.
+"Compare India, China, and the United States by July 2026 mean PM2.5, P95, and coverage; return a table and bar chart."
+Find the top five countries by July 2026 mean PM2.5 and plot their daily PM2.5 trends for the month.
+"Compare Delhi and Bengaluru PM2.5 in July 2026 using summary statistics, a box plot, and a data-quality note."
+Identify the five countries with the most PM2.5 exceedance days in July 2026 and report both exceedance percentage and data coverage.
+"Summarize Germany's PM2.5 from February through July 2026 with monthly statistics, trend direction, and a line chart."
+"Report July 2026 PM2.5 mean, P95, missing percentage, and imputed percentage for each of the seven primary AQA countries."
+"Using data through 20 August 2026 23:00 UTC, forecast Delhi PM2.5 for the next 24 hours and report the mean predicted concentration."
+Forecast Beijing PM2.5 for the next 24 hours from 20 August 2026 23:00 UTC and compare the forecast with the seasonal-naive forecast.
+Forecast London NO2 for 24 hours from 20 August 2026 23:00 UTC and return prediction intervals.
+Forecast Mexico City O3 for 24 hours from 20 August 2026 23:00 UTC and report the expected daily maximum.
+"Forecast Delhi PM2.5 for 6, 12, and 24 hours from the same issue time and compare the predicted means."
+"Using historical data through 20 August 2026 23:00 UTC, evaluate the 24-hour Delhi PM2.5 forecast against the observed values on 21 August 2026."
+Identify countries where PM2.5 is available from more than 100 monitoring stations and report each country's 2026 data-coverage window.
+"Find countries for which at least four of the six pollutants have 50 or more monitoring stations, and report the qualifying pollutants."
+"For each primary network, report the pollutant with the largest number of station–pollutant series and its share of that network's total series."
+Identify the five countries with the highest ratio of station–pollutant series to monitoring sites.
+"For India, China, the United States, and Mexico, report the number of active PM2.5 stations in July 2026 and the fraction of registered PM2.5 stations that were active."
+Find countries with PM2.5 observations in every month from August 2025 through July 2026 and at least 80% overall hourly coverage.
+"For each of the seven primary AQA countries, calculate mean, median, P95, standard deviation, and coefficient of variation for daily PM2.5 during July 2026."
+"For India and China, calculate monthly PM2.5 mean, median, P95, and valid-day count for each month from August 2025 through July 2026."
+"For France, Germany, and the United Kingdom, calculate the July 2026 mean and P95 for NO2 and O3 and report the pollutant with greater relative variability in each country."
+"For Mexico, calculate weekday and weekend PM2.5 means, medians, and P95 values during May–July 2026."
+"For the United States, calculate daytime and nighttime O3 means and P95 values during June–July 2026."
+"For each primary country, calculate the July 2026 mean PM2.5 using only valid station-days and report the number of station-days contributing to the estimate."
+"Compare PM2.5 in India, China, the United States, and Mexico over the last 12 complete months using monthly mean, P95, and coefficient of variation."
+"Compare Delhi, Bengaluru, Beijing, London, Paris, Berlin, and Mexico City by July 2026 mean PM2.5 and valid-day coverage."
+Compare winter-period PM2.5 with summer-period PM2.5 for India and China using predefined seasonal windows within the frozen snapshot.
+"Compare the July 2026 weekday–weekend PM2.5 difference across India, China, the United States, and the United Kingdom."
+"Compare NO2–PM2.5 Spearman correlations across Delhi, Beijing, London, and Mexico City during May–July 2026."
+"Compare July 2026 O3 distributions between the United States, France, Germany, and the United Kingdom using median, IQR, and P95."
+Rank countries by the year-over-year percentage change in mean PM2.5 between Aug 2024–Jul 2025 and Aug 2025–Jul 2026.
+"Among countries with at least 80% PM2.5 coverage in July 2026, rank the top 10 by mean PM2.5."
+"Rank cities in India by July 2026 mean PM2.5, requiring at least 15 valid days and at least two contributing stations."
+Rank all countries by the percentage of valid July 2026 days exceeding the configured PM2.5 guideline.
+Rank the seven primary AQA countries by the magnitude of their PM2.5 linear trend from August 2025 through July 2026.
+"Rank countries by the July 2026 95th-percentile O3 concentration, excluding countries with less than 75% coverage."
+Decompose India's daily PM2.5 from August 2025 through July 2026 into trend and seasonal components and summarize the dominant seasonal pattern.
+Identify statistically meaningful monotonic PM2.5 trends across the seven primary countries over Aug 2025–Jul 2026 using a configured trend test.
+Compare monthly PM2.5 trend slopes before and after January 2026 for India and China.
+"Identify the three months with the highest mean PM2.5 in each of India, China, the United States, and Mexico during Aug 2025–Jul 2026."
+Calculate monthly anomalies of PM2.5 relative to each country's Aug 2025–Jul 2026 mean for the seven primary countries.
+"Compare the diurnal NO2 profiles of Delhi, London, and Mexico City during weekdays in July 2026."
+"For Delhi, Bengaluru, Mumbai, Chennai, and Kolkata, calculate July 2026 CPCB AQI category distributions and rank cities by Severe plus Very Poor days."
+"Compare Delhi's CPCB AQI with a US-EPA-style AQI computed from the same eligible pollutant concentrations for July 2026, clearly separating the two standards."
+Rank the seven primary countries by PM2.5 guideline-exceedance percentage during Aug 2025–Jul 2026 using a common concentration threshold.
+"Find the longest consecutive PM2.5 exceedance episode in Delhi during Aug 2025–Jul 2026 and report its start, end, and duration."
+Compare exceedance frequency and exceedance magnitude for PM2.5 in India and China during Aug 2025–Jul 2026.
+"For each month from February through July 2026, report the fraction of valid Delhi days falling in Poor-or-worse CPCB AQI categories."
+"Among all countries, identify the 10 with the highest PM2.5 coverage during Aug 2025–Jul 2026, requiring at least 10 PM2.5 stations."
+Quantify how India's monthly PM2.5 mean changes when imputed observations are included versus observed-only data from February through July 2026.
+Identify stations in India with more than 20% PM2.5 missingness in July 2026 and summarize their gap-length distribution.
+Compare PM2.5 coverage and imputation rates across the seven primary networks during July 2026.
+Determine how many July 2026 country-level PM2.5 rankings change position when countries with less than 80% coverage are removed.
+Identify countries where more than 10% of July 2026 PM2.5 values are imputed and report the corresponding observed-only versus filled mean difference.
+Create a line chart of monthly mean PM2.5 for the seven primary AQA countries from August 2025 through July 2026.
+"Create a clustered bar chart showing July 2026 mean and P95 PM2.5 for India, China, the United States, and Mexico."
+"Create a violin plot comparing daily PM2.5 distributions for Delhi, Beijing, London, and Mexico City during July 2026."
+Create a pollutant correlation heatmap for India during May–July 2026 using daily country-level values.
+"Create a calendar-style heatmap of Delhi daily PM2.5 for July 2026, marking days below the minimum coverage threshold."
+Create a scatter plot of country-level PM2.5 mean versus PM2.5 data coverage for July 2026 and label the seven primary countries.
+"Find the five countries with the highest July 2026 mean PM2.5 among those with at least 80% coverage, then show their monthly trends from February through July and include a quality summary."
+"Identify the five Indian cities with the highest July 2026 PM2.5, compare their distributions with a box plot, and report valid-day coverage."
+"Determine whether India's PM2.5 improved year over year, quantify the change, identify the three months contributing most to the difference, and visualize the two annual monthly profiles."
+"Compare India and China on PM2.5 mean, P95, exceedance percentage, trend slope, and coverage over Aug 2025–Jul 2026, then provide a concise narrative summary."
+Identify countries with decreasing PM2.5 trends but increasing O3 trends over Aug 2025–Jul 2026 and return a table with both slopes and coverage.
+"Find the top five countries by July 2026 PM2.5 P95, retrieve their data-quality metrics, and create a ranked bar chart annotated with coverage."
+"Using data through 20 August 2026 23:00 UTC, forecast Delhi PM2.5 for 24 hours with the configured primary model and seasonal-naive baseline, then report MAE for both against 21 August observations."
+"Backtest a 24-hour PM2.5 forecast for Beijing issued at 20 August 2026 23:00 UTC and report MAE, RMSE, and MASE."
+"Compare 24-hour forecast accuracy for Delhi, Beijing, and London PM2.5 using the same model and issue time, evaluated against 21 August 2026 observations."
+"For Delhi PM2.5, compare 6-hour, 12-hour, and 24-hour forecast errors from the 20 August 2026 23:00 UTC issue time."
+Evaluate whether including imputed context values changes the 24-hour Delhi PM2.5 forecast relative to an observed-only context strategy.
+Forecast PM2.5 for the five highest-coverage Indian cities from 20 August 2026 23:00 UTC and rank them by predicted 24-hour mean.
+Identify country–pollutant combinations that have at least 80% coverage in every month from August 2025 through July 2026 and at least 20 active stations per month.
+"Find countries where the active-station count for PM2.5 changed by more than 20% between August 2025 and July 2026, and report the direction of change."
+Identify countries receiving observations from more than one source family in the frozen metadata and report potentially overlapping pollutants.
+"For each primary source network, quantify the fraction of registered station–pollutant series contributing valid data in July 2026."
+"Identify cities with at least three PM2.5 stations, at least 80% July 2026 coverage, and at least one year of historical data before August 2025."
+"Find all country–pollutant combinations where unit normalization or source-specific conversion rules were applied, and summarize the canonical units."
+"Calculate July 2026 PM2.5 mean and P95 for every country using only station-days with at least 75% hourly coverage, then compare them with unfiltered estimates."
+"Estimate the sensitivity of India's July 2026 mean PM2.5 to station-day coverage thresholds of 50%, 75%, and 90%."
+"For India, China, the United States, and Mexico, calculate robust PM2.5 statistics for July 2026 using median, IQR, and trimmed mean, and compare them with the arithmetic mean."
+"Calculate population-unweighted city-level PM2.5 means for the seven primary countries during July 2026, ensuring each qualifying city contributes equally regardless of station count."
+"Compare observed-only and filled-data monthly PM2.5 statistics for India from February through July 2026, including absolute and percentage differences."
+"For the seven primary countries, compute July 2026 PM2.5 mean, P95, coefficient of variation, valid-day coverage, and number of contributing cities under a consistent inclusion rule."
+"Compare India and China PM2.5 over Aug 2025–Jul 2026 using both observed-only and filled data, and quantify how imputation changes the apparent country difference."
+"Compare Delhi and Bengaluru PM2.5 in July 2026 after restricting both cities to days on which both have valid coverage, then compare with the unrestricted result."
+"Compare PM2.5 trends among India, China, the United States, and Mexico after requiring a common set of months meeting at least 80% coverage."
+"Compare the seven primary countries by July 2026 PM2.5 using station-weighted and city-weighted aggregation, and identify rank reversals."
+"Compare weekday–weekend PM2.5 differences in Delhi, Beijing, London, and Mexico City while excluding days below the configured coverage threshold."
+"Compare PM2.5 exceedance percentages for India and China under two different configured concentration guidelines, using the same set of valid days."
+Rank countries by July 2026 mean PM2.5 using only countries with at least 80% coverage and at least 10 active PM2.5 stations; return the top 10 and excluded-country count.
+"Rank Indian cities by July 2026 PM2.5 using city-level daily means, requiring at least two valid stations per day and at least 20 valid days in the month."
+"Rank countries by year-over-year PM2.5 improvement, but exclude any country with less than 80% coverage in either comparison year."
+Rank countries by the number of extreme PM2.5 days above their own 95th-percentile historical baseline computed from Aug 2024–Jul 2025.
+"Rank the seven primary countries by a composite severity score combining normalized July 2026 mean PM2.5, P95, and exceedance percentage, and report the component values."
+Rank countries by PM2.5 trend slope over Aug 2025–Jul 2026 and provide bootstrap or configured uncertainty intervals where supported.
+Detect change points in India's daily PM2.5 series from August 2025 through July 2026 and report the largest shift with before/after means.
+Assess whether India's PM2.5 trend over Aug 2025–Jul 2026 remains negative after excluding imputed observations.
+"Compare seasonal PM2.5 patterns across India, China, the United States, and Mexico after normalizing each country's series by its annual median."
+Identify months where India's PM2.5 anomaly exceeded two standard deviations from its Aug 2025–Jul 2026 monthly mean.
+Compare weekday diurnal NO2 profiles in Delhi and London using only hours jointly observed in both cities.
+Determine whether July 2026 PM2.5 shows a statistically detectable weekly pattern in Delhi after excluding low-coverage days.
+"For Delhi, calculate July 2026 CPCB AQI using observed-only data and again using filled data; identify days whose AQI category changes because of imputation."
+Compare Delhi and Bengaluru CPCB AQI category distributions using only dates for which both cities satisfy the minimum coverage rule.
+"Identify the 10 Indian cities with the greatest number of Poor-or-worse CPCB AQI days in July 2026, requiring at least 20 valid AQI days."
+Quantify how the number of Delhi PM2.5 guideline-exceedance days in July 2026 changes when the minimum daily coverage threshold is raised from 50% to 75% to 90%.
+"Find the longest PM2.5 exceedance episodes in Delhi, Beijing, and London over Aug 2025–Jul 2026 and compare duration and mean exceedance magnitude."
+"Compare the same July 2026 pollutant concentrations under CPCB and US EPA AQI mappings where technically applicable, and report days with materially different category labels."
+"Identify the 20 station–pollutant series with the highest missingness in July 2026 among series expected to report throughout the month, and report gap statistics."
+"Quantify the effect of short-gap imputation on India's July 2026 PM2.5 mean, P95, and exceedance percentage."
+"For each primary network, report delayed, missing, invalid, and imputed observation fractions during the last seven complete days before the cutoff."
+Identify countries whose July 2026 PM2.5 rank changes by at least three positions when switching from filled data to observed-only data.
+Evaluate imputation error on artificially masked 1-hour and 3-hour PM2.5 gaps using a reproducible sample of complete July 2026 station sequences.
+Identify countries where more than 25% of July 2026 PM2.5 station-days fail the configured coverage threshold and explain how this affects comparative analysis.
+Create a dual-view analysis for the top 10 July 2026 PM2.5 countries: a ranked bar chart of mean concentration and a companion marker/annotation for coverage.
+"Create monthly PM2.5 line charts for India and China using observed-only and filled series, clearly distinguishing the two data treatments."
+"Create a heatmap showing country-by-month PM2.5 mean for the seven primary countries from Aug 2025 through Jul 2026, masking cells below 80% coverage."
+"Create box plots comparing July 2026 PM2.5 distributions in Delhi, Beijing, London, and Mexico City using only jointly valid dates."
+Create a scatter plot of July 2026 country-level PM2.5 mean versus missing-data percentage and label outliers in both dimensions.
+Create an hour-of-day by day-of-week NO2 heatmap for Delhi using observed-only data and visually mark cells with insufficient sample counts.
+"Rank countries by July 2026 PM2.5 after enforcing coverage and station-count thresholds, compare the top five with their year-over-year change, and visualize both current level and change."
+"Find Indian cities with Poor-or-worse CPCB AQI on at least 25% of valid July 2026 days, rank them by mean PM2.5, and include coverage and imputation rates."
+"Identify countries whose PM2.5 improved year over year while O3 worsened, require at least 80% coverage for both pollutants, and plot their monthly trajectories."
+"Compare India and China using observed-only PM2.5 mean, P95, exceedance frequency, trend slope, and data completeness, then repeat with filled data and summarize differences."
+"Find the five countries with the largest July 2026 PM2.5 uncertainty due to missing data by comparing observed-only and filled estimates, and visualize the estimate gap."
+"Identify the three most severe PM2.5 episodes in Delhi over Aug 2025–Jul 2026, summarize peak, duration, coverage, and imputation, and plot each episode."
+"Backtest Delhi PM2.5 24-hour forecasts at daily issue times from 15–21 August 2026 and report aggregate MAE, RMSE, MASE, and interval coverage if available."
+Compare 24-hour PM2.5 forecast accuracy for Delhi using observed-only context versus imputed context over issue times from 15–21 August 2026.
+"Evaluate 24-hour PM2.5 forecasts for Delhi, Beijing, London, and Mexico City over issue times from 15–21 August 2026 and rank locations by MASE."
+"Test forecast robustness by masking the final 1, 3, and 6 context hours for Delhi PM2.5 before a 24-hour forecast and report accuracy degradation."
+Compare the configured primary forecasting model with seasonal naive across the five highest-coverage Indian cities over issue times from 15–21 August 2026.
+"Forecast Delhi PM2.5 for 24 hours at the 20 August 2026 issue time, report the probability or interval of exceeding the configured PM2.5 guideline if probabilistic output is supported, and verify against observations."
+"Construct a reproducible cohort of countries eligible for cross-country PM2.5 analysis over Aug 2025–Jul 2026 using thresholds for station count, monthly coverage, and continuity; report inclusion and exclusion reasons."
+Identify source/network and station metadata changes that could affect longitudinal PM2.5 comparability between Aug 2024–Jul 2025 and Aug 2025–Jul 2026.
+Determine whether any cities in the frozen snapshot receive overlapping PM2.5 observations from multiple source networks; flag potential duplicate or cross-source station mappings.
+"Build a country–pollutant availability matrix for all six pollutants, augmented with station count, valid-hour coverage, and first/last observation date, then identify analytically sparse combinations."
+"Identify the subset of city–pollutant series suitable for 24-hour forecasting evaluation under minimum history, continuity, coverage, and recent-data criteria."
+"Audit the provenance chain for the data used in a July 2026 India-versus-China PM2.5 comparison, including source network, unit normalization, QC status, imputation status, and aggregate lineage."
+Estimate the uncertainty of July 2026 country-level mean PM2.5 caused by station sampling by bootstrap resampling qualifying stations within each of the seven primary countries.
+"Compare station-weighted, city-weighted, and equal-country aggregation schemes for July 2026 PM2.5 across the seven primary countries and quantify the resulting differences."
+"For India, quantify how July 2026 PM2.5 mean, P95, and exceedance percentage vary across combinations of coverage thresholds and observed-only versus filled-data policies."
+"Calculate robust year-over-year PM2.5 changes for all eligible countries using paired months with acceptable coverage in both years, and return uncertainty intervals where supported."
+"For each eligible country, decompose the variance of daily PM2.5 during Aug 2025–Jul 2026 into within-city and between-city components using the available hierarchy."
+Compute a reproducible global summary of PM2.5 over Aug 2025–Jul 2026 under both station-weighted and country-balanced aggregation and explain the difference in estimates.
+"Compare India and China over Aug 2025–Jul 2026 using matched months, common coverage criteria, observed-only data, city-balanced aggregation, and uncertainty intervals for mean PM2.5."
+"Compare Delhi, Beijing, London, and Mexico City on pollution level, variability, exceedance burden, data completeness, and short-term forecastability using a common evaluation window."
+Compare country rankings produced by station-weighted versus city-balanced PM2.5 aggregation and quantify rank stability using Spearman or Kendall correlation.
+"Compare the seven primary countries on PM2.5 and O3 jointly, identifying countries that are Pareto-dominated with respect to lower pollution and higher data completeness."
+Compare year-over-year PM2.5 changes across eligible countries after matching months and enforcing identical coverage rules in both years; identify statistically or practically meaningful differences.
+Compare observed-only and imputed-data conclusions for the five most polluted eligible countries and identify any cases where the qualitative conclusion reverses.
+"Produce a robust top-10 ranking of countries by July 2026 PM2.5 that is stable across coverage thresholds of 70%, 80%, and 90%; flag countries whose ranks are unstable."
+"Rank eligible Indian cities by a multi-criteria pollution burden score combining mean PM2.5, P95, exceedance frequency, and data completeness, and provide the formula and component values."
+Rank countries by year-over-year PM2.5 improvement using paired-month comparisons and bootstrap uncertainty; identify ranks that are not statistically distinguishable.
+"Rank countries by extreme-pollution burden using frequency, duration, and magnitude of PM2.5 exceedance episodes over Aug 2025–Jul 2026."
+"Rank country–pollutant pairs by data reliability using coverage, gap length, imputation fraction, and active-station stability, and identify the 10 most and least reliable pairs."
+"Rank the seven primary countries by a combined analytics-readiness score using pollutant breadth, station count, continuity, coverage, and low imputation dependence."
+"Characterize PM2.5 regime changes across the seven primary countries over Aug 2025–Jul 2026 using trend, seasonality, and change-point analysis, then identify shared versus country-specific patterns."
+"Test whether the apparent year-over-year PM2.5 improvement in India persists under alternate aggregation choices, coverage thresholds, and exclusion of imputed values."
+Identify synchronized high-PM2.5 episodes across India and China over Aug 2025–Jul 2026 and quantify temporal overlap using a defined episode threshold.
+"Compare long-term PM2.5 trend estimates from ordinary linear regression, robust regression, and a monotonic trend estimator for eligible countries, and flag inconsistent conclusions."
+"Determine whether countries with strong winter PM2.5 peaks also show stronger year-over-year variability, using a reproducible seasonal-strength metric."
+Analyze whether changes in active monitoring-station composition materially alter the estimated PM2.5 trend in any primary country.
+"Assess the robustness of Delhi's July 2026 CPCB AQI category distribution to coverage thresholds, observed-only versus filled data, and alternative station aggregation rules."
+"Compare Delhi, Bengaluru, Beijing, London, and Mexico City using a common PM2.5 concentration-based exceedance metric and their local AQI frameworks, clearly separating comparable from non-comparable outputs."
+Identify cities whose classification as high-burden changes when ranking by mean PM2.5 versus exceedance frequency versus AQI category burden.
+"Quantify uncertainty in annualized PM2.5 exceedance burden for cities with incomplete data using only reproducible, explicitly stated assumptions."
+Identify the most severe multi-day PM2.5 episodes across eligible cities in the frozen snapshot and rank episodes by duration × mean exceedance magnitude.
+Evaluate how imputation can alter AQI-category transitions during severe episodes by comparing observed-only and filled-data AQI sequences for selected high-burden cities.
+"Benchmark the configured short-gap imputation method against forward fill, linear interpolation, and seasonal interpolation on reproducibly masked complete PM2.5 sequences across multiple countries."
+Quantify downstream ranking sensitivity to imputation by repeating July 2026 country PM2.5 rankings under observed-only data and each imputation baseline.
+"Simulate 5%, 10%, and 20% additional missingness in complete PM2.5 station series and measure degradation in country-level mean, P95, exceedance, and ranking accuracy."
+Identify whether missingness is systematically associated with pollution level by comparing observed concentrations immediately before and after missing episodes with matched non-missing periods.
+"Evaluate source-network reliability over the last 30 complete days before the cutoff using ingestion success, data freshness, missingness, invalid-value rate, and late-arrival recovery."
+Determine the minimum coverage threshold needed to keep July 2026 top-10 country PM2.5 ranking agreement above a configured target relative to the highest-coverage reference.
+"Create an integrated visual summary of the July 2026 top-10 PM2.5 countries combining ranking, coverage, uncertainty, and year-over-year change without obscuring data-quality limitations."
+Create a small-multiple visualization comparing observed-only and filled monthly PM2.5 trajectories for the seven primary countries over Aug 2025–Jul 2026.
+Create a heatmap of rank stability for countries across different coverage thresholds and aggregation schemes.
+"Create a multi-panel episode visualization for the three most severe Delhi PM2.5 episodes, showing hourly concentration, missing/imputed points, and guideline threshold."
+"Create a scatter plot of year-over-year PM2.5 change versus July 2026 data completeness for eligible countries, with point size or annotation reflecting station count."
+"Create a visualization comparing 24-hour forecast accuracy and data completeness across selected cities, clearly separating model error from missing-data effects."
+"Identify the 10 most polluted eligible countries in July 2026 under robust coverage rules, quantify year-over-year change, assess rank stability to imputation, and produce a concise table plus visualization."
+"Determine whether India experienced meaningful PM2.5 improvement over the last 12 complete months by combining matched-period statistics, trend analysis, exceedance burden, data-quality sensitivity, and uncertainty."
+"Build a comparative air-quality profile for Delhi, Beijing, London, and Mexico City covering PM2.5 level, variability, diurnal pattern, exceedance burden, data quality, and a historical 24-hour forecast backtest."
+"Find countries with simultaneously worsening PM2.5 and O3 trends, validate that the result is robust to coverage filtering and imputation policy, and visualize the qualifying trajectories."
+"Identify the five most severe city-level PM2.5 episodes in the last 12 complete months, report episode duration, peak, mean exceedance, coverage, imputation, and source provenance, and plot each episode."
+"Generate an audit-ready answer to 'Which countries had the worst PM2.5 in July 2026?' including inclusion criteria, aggregation method, coverage filtering, ranking, uncertainty, excluded countries, provenance, and visualization."
+"Run rolling 24-hour PM2.5 backtests for eligible cities over 15–21 August 2026, compare the configured forecasting model with seasonal naive, and report aggregate and per-city MASE with confidence intervals if supported."
+Evaluate whether forecast-model ranking changes when backtests are restricted to high-coverage contexts versus all eligible contexts across selected cities.
+"Measure the effect of 1-, 3-, and 6-hour context gaps on 24-hour PM2.5 forecast accuracy across multiple countries, comparing no-fill and configured-imputation strategies."
+Compare zero-shot or foundation-model forecasting with a simple local baseline for selected high-coverage city PM2.5 series over the same rolling-origin evaluation window.
+"Identify cities where the configured forecasting model fails to beat seasonal naive at 24 hours, and test whether failure is associated with missingness, volatility, or pollutant level."
+"Construct a forecast reliability report for Delhi, Beijing, London, and Mexico City including MAE, RMSE, MASE, interval coverage where available, data-quality context, and example forecast plots."

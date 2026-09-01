@@ -1,0 +1,62 @@
+# Python environments and generated package metadata
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Secrets and machine-local configuration
+.env
+.env.*
+!.env.example
+configs/aqa.yaml
+configs/*.local.yaml
+*.pem
+*.key
+
+# Runtime data, databases, model artifacts, exports, and logs
+data/**
+!data/README.md
+*.duckdb
+*.duckdb.wal
+*.parquet
+*.log
+*.pid
+*.zip
+
+# Local upstream/reference snapshot; publish attribution only
+reference/**
+!reference/README.md
+
+# Generated and internal evaluation artifacts
+evaluation/**
+evaluation-results*.jsonl
+evaluation-results*.json
+
+# Internal engineering reports; publish only curated paper documents
+docs/**
+!docs/ARCHITECTURE_PUBLIC.md
+!docs/DATA_AVAILABILITY.md
+!docs/EVALUATION.md
+
+# Deployment and data-maintenance utilities remain private
+scripts/**
+!scripts/export_questions_only.py
+!scripts/run_questions_benchmark.py
+
+# Keep portable tests; exclude corpus-dependent integration tests
+tests/**
+!tests/test_agent.py
+!tests/test_aqi.py
+!tests/test_forecasting.py
+!tests/test_periods.py
+!tests/test_queryspec.py
+
+# Editors and operating-system files
+.DS_Store
+.idea/
+.vscode/
+*~
