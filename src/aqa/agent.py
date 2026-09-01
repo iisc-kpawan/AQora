@@ -32,6 +32,7 @@ from .simulation_analytics import SimulationAnalytics
 from .cohort_analytics import CohortAnalytics
 from .derived_temporal_analytics import DerivedTemporalAnalytics
 from .advanced_aqi_analytics import AdvancedAQIAnalytics
+from .compound_analytics import CompoundAnalytics
 from .queryspec import QuerySpec
 
 
@@ -130,6 +131,7 @@ class ConversationalAgent:
         self.cohort_analytics = CohortAnalytics(self.config)
         self.derived_temporal_analytics = DerivedTemporalAnalytics(self.config)
         self.advanced_aqi_analytics = AdvancedAQIAnalytics(self.config)
+        self.compound_analytics = CompoundAnalytics(self.config)
 
     def ask(self, question: str, *, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
         assessment = assess_question(question, self.config)
@@ -141,6 +143,11 @@ class ConversationalAgent:
         if not assessment.can_execute and not metadata_period_audit:
             return limitation_result(question, assessment, self.config)
         datasets = assessment.supported_datasets
+        if self.compound_analytics.should_handle(question, assessment):
+            try:
+                return self.compound_analytics.execute(question, assessment)
+            except AQAError as exc:
+                return limitation_result(question, assessment, self.config, extra_reason=exc.message)
         if self.advanced_aqi_analytics.should_handle(question, assessment):
             try:
                 return self.advanced_aqi_analytics.execute(question, assessment)

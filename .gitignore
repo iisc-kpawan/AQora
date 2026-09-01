@@ -51,6 +51,7 @@ scripts/**
 tests/**
 !tests/test_agent.py
 !tests/test_aqi.py
+!tests/test_compound_analytics.py
 !tests/test_forecasting.py
 !tests/test_periods.py
 !tests/test_queryspec.py

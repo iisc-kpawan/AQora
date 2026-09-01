@@ -22,7 +22,10 @@ The language model plans and explains; it does not calculate reported air-
 quality values. The implementation includes querying, descriptive and temporal
 analytics, comparisons and rankings, quality-aware analysis, AQI standards,
 visualization, forecasting, imputation assessment, uncertainty analysis, and
-multi-criteria analytical workflows.
+multi-criteria analytical workflows. Compound operators include cross-pollutant
+relative variability, matched-season contrasts, paired-month year-over-year
+attribution, historical-percentile burden, and same-issue multi-horizon
+forecast comparison.
 
 ## Repository contents
 
