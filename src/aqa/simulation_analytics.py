@@ -797,6 +797,12 @@ class SimulationAnalytics:
 
     def _result(self, rows: list[dict], started: float, operator: str, answer: str,
                 metrics: list[str], analysis: dict[str, Any]) -> dict[str, Any]:
+        countries = [row.get("country") for row in rows if row.get("country")]
+        # A plain bar chart plots one bar per location; with several rows per
+        # country (one per method/gap combination here) it silently stacks them
+        # into a meaningless summed bar, so fall back to the table view instead.
+        one_row_per_country = len(rows) == len(set(countries))
+        visualization = {"type": "bar"} if one_row_per_country else {"type": "table"}
         return {
             "kind": "analytics",
             "query_spec": {"dataset": "SIMULATION_COHORT", "operation": operator, "geography_level": "station",
@@ -810,7 +816,7 @@ class SimulationAnalytics:
             "metadata": {"dataset": "SIMULATION_COHORT", "geography_level": "station", "station_balanced": True,
                          "value_status": "observed", "latency_ms": round((time.perf_counter() - started) * 1000, 2),
                          "warnings": []},
-            "visualization": {"type": "bar"},
+            "visualization": visualization,
             "analysis": {"operator": operator, "seed": self.seed, "sequence_hours": self.sequence_hours,
                          "station_sequences_per_country": self.samples_per_country, "source_data_mutated": False, **analysis},
             "answer": answer, "display_title": "PM2.5 · reproducible missing-data experiment",
