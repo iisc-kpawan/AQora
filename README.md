@@ -22,13 +22,19 @@ The language model plans and explains; it does not calculate reported air-
 quality values. The implementation includes querying, descriptive and temporal
 analytics, comparisons and rankings, quality-aware analysis, AQI standards,
 visualization, forecasting, imputation assessment, uncertainty analysis, and
-multi-criteria analytical workflows.
+multi-criteria analytical workflows. Compound operators include cross-pollutant
+relative variability, matched-season contrasts, paired-month year-over-year
+attribution, historical-percentile burden, and same-issue multi-horizon
+forecast comparison.
 
 ## Repository contents
 
 - `src/aqa/`: application, API, conversational planner, analytics, and UI
 - `benchmark/aqa_eval_300_questions.csv`: the 300 published questions, with no
   labels, answers, tool annotations, or internal metadata
+- `benchmark/aqa_eval_10_representative_questions.csv`: the 10 representative
+  questions (Table 2 in the paper) used for the Table 1 quantitative
+  evaluation, labeled by difficulty level
 - `scripts/run_questions_benchmark.py`: provider/model-neutral evaluation client
 - `tests/`: data-independent unit and smoke tests
 - `docs/`: public architecture, evaluation, and data-availability notes
@@ -78,11 +84,21 @@ Run it against a configured AQora instance with:
 Generated responses and timing records are local artifacts and are ignored by
 Git. See `docs/EVALUATION.md` for metric definitions and reporting guidance.
 
+`benchmark/aqa_eval_10_representative_questions.csv` holds the 10 representative
+questions (two per difficulty level, L1-L5) used for the paper's Table 1
+quantitative evaluation across multiple local and cloud-based LLMs; see Table 2
+of the paper for the same questions with commentary. Run them the same way,
+pointing `--input` at that file instead.
+
 ## Data availability
 
 No observations, station metadata, database files, partitions, credentials, or
 deployment paths are distributed in this repository. See
 `docs/DATA_AVAILABILITY.md` for the public-data citation and artifact boundary.
+
+The ingested observation corpus and the operational lakehouse currently reside
+only on the authors' server and are not yet published. They will be uploaded
+for public access after the paper's review period concludes.
 
 ## Safety and reproducibility
 

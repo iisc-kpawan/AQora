@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 import time
 from datetime import datetime
 from typing import Any
@@ -29,15 +30,15 @@ class ForecastPortfolioAnalytics:
         text = question.casefold()
         return (
             "suitable for 24-hour forecasting evaluation" in text
-            or ("rolling 24-hour" in text and "eligible cities" in text and "seasonal naive" in text)
-            or "fails to beat seasonal naive" in text
+            or ("rolling 24-hour" in text and "eligible cities" in text and re.search(r"seasonal[ -]naive", text))
+            or re.search(r"fails to beat seasonal[ -]naive", text)
         )
 
     def execute(self, question: str, assessment: CapabilityAssessment) -> dict[str, Any]:
         del assessment
         if "suitable for 24-hour forecasting evaluation" in question.casefold():
             return self._readiness()
-        if "fails to beat seasonal naive" in question.casefold():
+        if re.search(r"fails to beat seasonal[ -]naive", question.casefold()):
             return self._failure_diagnostics()
         return self._rolling_pm25()
 
@@ -92,7 +93,7 @@ class ForecastPortfolioAnalytics:
                 rows.append({
                     "dataset": candidate["dataset"], "city": candidate["city"], "pollutant": "PM2.5",
                     "eligible": False, "reason": reason, "origin_count": 0, "observed_target_count": 0,
-                    "model": None, "mae": None, "rmse": None, "mase": None, "mase_ci_lower": None,
+                    "model": None, "mae": None, "rmse": None, "mase": None, "smape": None, "mase_ci_lower": None,
                     "mase_ci_upper": None, "seasonal_naive_mae": None, "mae_improvement": None,
                     "beats_seasonal_naive": None, "mean_input_filled_fraction": None,
                     "mean_context_level": None, "mean_context_volatility": None,
@@ -117,7 +118,7 @@ class ForecastPortfolioAnalytics:
                 "dataset": candidate["dataset"], "city": candidate["city"], "pollutant": "PM2.5",
                 "eligible": True, "reason": None, "origin_count": result["analysis"]["origin_count"],
                 "observed_target_count": count, "model": ", ".join(models),
-                "mae": metrics["mae"], "rmse": metrics["rmse"], "mase": mase,
+                "mae": metrics["mae"], "rmse": metrics["rmse"], "mase": mase, "smape": metrics["smape"],
                 "mase_ci_lower": ci_lower, "mase_ci_upper": ci_upper,
                 "seasonal_naive_mae": baseline["mae"], "mae_improvement": improvement,
                 "beats_seasonal_naive": won,
@@ -156,7 +157,7 @@ class ForecastPortfolioAnalytics:
         return self._result(
             rows, started=started, operator="rolling_forecast_portfolio_v1", answer=answer,
             title="PM2.5 · multi-city rolling 24-hour backtest",
-            metrics=["mae", "rmse", "mase", "mase_ci_lower", "mase_ci_upper", "seasonal_naive_mae"],
+            metrics=["mae", "rmse", "mase", "smape", "mase_ci_lower", "mase_ci_upper", "seasonal_naive_mae"],
             analysis=aggregate,
         )
 

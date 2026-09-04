@@ -71,7 +71,7 @@ class CapabilityAssessment:
 
 def classify_intent(question: str) -> str:
     text = question.casefold()
-    if "forecast" in text or "backtest" in text or "mase" in text or "rmse" in text:
+    if "forecast" in text or "backtest" in text or "mase" in text or "rmse" in text or "smape" in text:
         return "forecast"
     if any(term in text for term in (
         "source network", "source family", "station–pollutant", "station-pollutant",
@@ -125,6 +125,8 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
     ))
     if "city-level" in text and not assessment.supported_datasets:
         global_scope = True
+    if _burden_episode_supported(text):
+        global_scope = True
     if assessment.intent == "ranking" and "countr" in text:
         global_scope = True
     if primary_scope:
@@ -139,15 +141,23 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
                 continue
             if method in {"derived temporal statistics", "year-over-year country ranking", "bootstrap uncertainty", "compound seasonal/cohort analysis", "compound year-over-year attribution"} and _derived_temporal_supported(text):
                 continue
+            if method in {"cross-pollutant derived comparison", "compound seasonal/cohort analysis",
+                          "compound year-over-year attribution", "derived temporal statistics",
+                          "multi-constraint ranking or sensitivity"} and _compound_derived_supported(text):
+                continue
             if method in {"temporal completeness cohort", "coverage cohort construction", "thresholded metadata cohort"} and _coverage_cohort_supported(text):
                 continue
             if method in {"multi-constraint ranking or sensitivity", "aggregation-method comparison"} and _rank_stability_supported(text):
+                continue
+            if method in {"annualized burden uncertainty", "multi-constraint ranking or sensitivity"} and _burden_episode_supported(text):
                 continue
             if method == "simulation/sensitivity experiment" and _simulation_experiment_supported(text):
                 continue
             if method == "specialized multi-view visualization" and _advanced_visualization_supported(text):
                 continue
             if method in {"forecast evaluation experiment", "bootstrap uncertainty", "temporal completeness cohort"} and _forecast_portfolio_supported(text):
+                continue
+            if method == "forecast evaluation experiment" and _multi_horizon_forecast_supported(text):
                 continue
             if method == "historical observed/imputed split" and _provenance_policy_supported(text, assessment.intent):
                 continue
@@ -173,6 +183,7 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
         or _derived_temporal_supported(text)
         or _advanced_temporal_supported(text)
         or _advanced_aqi_supported(text)
+        or _burden_episode_supported(text)
     )
     if requested_end and not flexible_country_cohort:
         for dataset in assessment.supported_datasets:
@@ -220,9 +231,9 @@ def _forecast_portfolio_supported(text: str) -> bool:
     )
     rolling = (
         "rolling 24-hour" in text and "eligible cities" in text
-        and "seasonal naive" in text and "15" in text and "21" in text
+        and bool(re.search(r"seasonal[ -]naive", text)) and "15" in text and "21" in text
     )
-    failure_diagnostics = "fails to beat seasonal naive" in text and all(
+    failure_diagnostics = bool(re.search(r"fails to beat seasonal[ -]naive", text)) and all(
         term in text for term in ("missingness", "volatility", "pollutant level")
     )
     return readiness or rolling or failure_diagnostics
@@ -302,6 +313,45 @@ def _advanced_aqi_supported(text: str) -> bool:
         "delhi, bengaluru, beijing, london, and mexico city using a common pm2.5 concentration-based exceedance metric",
         "classification as high-burden changes when ranking by mean pm2.5",
     ))
+
+
+def _burden_episode_supported(text: str) -> bool:
+    annualized = (
+        bool(re.search(r"annuali[sz]ed", text))
+        and "uncertainty" in text and "exceedance" in text
+        and bool(re.search(r"\bcit(?:y|ies)\b", text))
+        and any(term in text for term in ("incomplete", "missing"))
+    )
+    episodes = (
+        bool(re.search(r"multi[ -]?day", text))
+        and "episode" in text and bool(re.search(r"\bcit(?:y|ies)\b", text))
+        and any(term in text for term in ("rank", "most severe", "severity"))
+        and "duration" in text and "mean exceedance" in text
+    )
+    return annualized or episodes
+
+
+def _compound_derived_supported(text: str) -> bool:
+    relative_variability = "relative variability" in text and sum(
+        bool(re.search(pattern, text)) for pattern in (
+            r"pm\s*2(?:\.|\s*)5|\bpm25\b", r"\bpm\s*10\b", r"\bno\s*2\b",
+            r"\bso\s*2\b", r"\bo\s*3\b|\bozone\b", r"\bco\b",
+        )
+    ) >= 2
+    seasonal = "winter" in text and "summer" in text and "pm2.5" in text
+    attribution = bool(re.search(r"year[- ]over[- ]year", text)) and "month" in text and any(
+        term in text for term in ("contribut", "driv", "explain")
+    )
+    station_change = "active-station count" in text and any(
+        term in text for term in ("change", "changed", "direction")
+    )
+    historical_extremes = "own 95th-percentile" in text or "own 95th percentile" in text
+    return relative_variability or seasonal or attribution or station_change or historical_extremes
+
+
+def _multi_horizon_forecast_supported(text: str) -> bool:
+    match = re.search(r"for\s+([0-9,\sand]+?)\s+hours?\b", text)
+    return bool(match and "same issue time" in text and len(re.findall(r"\d+", match.group(1))) >= 2)
 
 
 def requested_period_end(question: str) -> datetime | None:

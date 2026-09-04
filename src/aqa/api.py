@@ -6,6 +6,7 @@ import os
 from dataclasses import asdict
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -68,6 +69,22 @@ def create_app() -> FastAPI:
     @app.post("/api/chat")
     def chat(request: ChatRequest):
         return agent.ask(request.question, provider=request.provider, model=request.model)
+
+    @app.get("/api/models")
+    def models():
+        llm_config = agent.config["llm"]
+        available: list[str] = []
+        try:
+            response = httpx.get(llm_config["ollama_base_url"].rstrip("/") + "/api/tags", timeout=2.0)
+            response.raise_for_status()
+            available = sorted(item["name"] for item in response.json().get("models", []))
+        except httpx.HTTPError:
+            pass
+        return {
+            "provider": llm_config["default_provider"],
+            "default_model": llm_config["default_model"],
+            "available_models": available,
+        }
 
     @app.post("/api/forecast")
     def forecast(request: ForecastRequest):

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class Dataset(str, Enum):
@@ -62,11 +62,26 @@ class ValueStatus(str, Enum):
     historical_unknown = "historical_unknown"
 
 
+class CorrelationMethod(str, Enum):
+    pearson = "pearson"
+    spearman = "spearman"
+    kendall = "kendall"
+
+
 class TimeRange(BaseModel):
     model_config = ConfigDict(extra="forbid")
     start: datetime | None = None
     end: datetime | None = None
     period: str | None = None
+
+    @field_validator("start", "end", mode="after")
+    @classmethod
+    def _drop_timezone(cls, value: datetime | None) -> datetime | None:
+        # All dataset bounds and downstream comparisons are naive local timestamps;
+        # a model-supplied offset (e.g. "...+05:30" or "...Z") must not survive here.
+        if value is not None and value.tzinfo is not None:
+            return value.replace(tzinfo=None)
+        return value
 
     @model_validator(mode="after")
     def one_mode(self):
@@ -87,6 +102,7 @@ class QueryFilters(BaseModel):
     value_status: ValueStatus = ValueStatus.any
     minimum_coverage: float | None = Field(default=None, ge=0, le=1)
     threshold: float | None = None
+    correlation_method: CorrelationMethod = CorrelationMethod.pearson
 
 
 class QuerySpec(BaseModel):
