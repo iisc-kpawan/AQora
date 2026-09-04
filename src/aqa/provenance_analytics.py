@@ -159,7 +159,7 @@ class ProvenanceAnalytics:
             ), result AS (
               SELECT dataset,any_value(network) network,any_value(country_code) country_code,
                      any_value(country_name) country,policy,coverage_threshold,{bucket_expression.replace('timestamp_local','bucket_day')} bucket,
-                     any_value(area_id) area_id,any_value(area_name) area_name,
+                     area_id,any_value(area_name) area_name,
                      avg(area_value) mean,median(area_value) median,
                      quantile_cont(area_value,.95) p95,max(area_value) max,
                      count(*) FILTER(WHERE area_value>{float(exceedance_threshold) if exceedance_threshold is not None else 'NULL'})::DOUBLE/nullif(count(area_value),0) exceedance_percentage,
@@ -167,7 +167,7 @@ class ProvenanceAnalytics:
                      sum(filled_count)::DOUBLE/nullif(sum(selected_count),0) filled_fraction,
                      sum(selected_count)::BIGINT selected_count,sum(filled_count)::BIGINT filled_count,
                      max(active_station_count)::BIGINT active_station_count,any_value(unit) unit
-              FROM chosen GROUP BY dataset,policy,coverage_threshold,bucket
+              FROM chosen GROUP BY dataset,area_id,policy,coverage_threshold,bucket
             )
             SELECT * FROM result ORDER BY bucket,country,policy
         """
