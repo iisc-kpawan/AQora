@@ -11,6 +11,20 @@ analytical tools, questions-only benchmark, portable tests, and a generic
 evaluation client. Observation data and operational infrastructure are not
 included.
 
+## Live demo
+
+A running instance is available for reviewers at
+[https://angler-unstamped-antiquity.ngrok-free.dev](https://angler-unstamped-antiquity.ngrok-free.dev).
+It serves the same code as this repository, over the full global dataset
+described below.
+
+Known limitation: the India (CPCB) source has been unreachable from the
+hosting server since 2026-05-31, so its data is frozen at that date. Questions
+that name an India date after 2026-05-31 (as in a few of the paper's Table 2
+questions) will return an explicit "outside loaded scope" response rather than
+a computed answer; this reflects the system's data-quality safeguards working
+as intended, not a computation error. All other datasets are current.
+
 ## Design
 
 ```text
