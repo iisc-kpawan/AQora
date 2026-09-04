@@ -18,12 +18,22 @@ A running instance is available for reviewers at
 It serves the same code as this repository, over the full global dataset
 described below.
 
-Known limitation: the India (CPCB) source has been unreachable from the
-hosting server since 2026-05-31, so its data is frozen at that date. Questions
-that name an India date after 2026-05-31 (as in a few of the paper's Table 2
-questions) will return an explicit "outside loaded scope" response rather than
-a computed answer; this reflects the system's data-quality safeguards working
-as intended, not a computation error. All other datasets are current.
+Known limitations, both confirmed against the raw ingested data rather than
+assumed:
+- The India (CPCB) source has been unreachable from the hosting server since
+  2026-05-31, so its data is frozen at that date. Questions that name an India
+  date after 2026-05-31 (as in a few of the paper's Table 2 questions) will
+  return an explicit "outside loaded scope" response rather than a computed
+  answer.
+- The United States (EPA) O3 series has no valid values at all for June,
+  July, or August 2026 (every row is flagged `missing_sparse_series`).
+  Questions about US O3 in that window will likewise return an explicit
+  limitation rather than a computed answer. Other EPA pollutants and other
+  months are unaffected.
+
+Both reflect the system's data-quality safeguards working as intended -- an
+honest "not available" rather than a fabricated number -- not a computation
+error. All other datasets and pollutants are current.
 
 ## Design
 
