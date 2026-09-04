@@ -259,17 +259,12 @@ class ConversationalAgent:
             if guarded != spec:
                 spec = guarded
                 trace = ModelTrace("deterministic_guardrail", "rule_planner_v2", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
-        relative_period_mentioned = re.search(
-            r"\blast\s+(?:\d+\s+)?(?:complete\s+)?(?:hours?|days?|weeks?|months?|years?)\b"
-            r"|\b(?:this|current)\s+month\b|\blatest\s+(?:month|available)\b"
-            r"|\bover\s+years\b|\bby\s+year\b|\bacross\s+years\b|\ball\s+years\b",
-            text,
-        )
-        if relative_period_mentioned:
+        confident_period = _confident_relative_period(text)
+        if confident_period:
             # A model can hallucinate absolute dates for a relative phrase, or pick the
             # wrong phrase entirely (e.g. "last month" for a "last year" question); the
             # phrase actually present in the question always wins over the model's guess.
-            deterministic_range = TimeRange.model_validate(_time_range_from_question(text))
+            deterministic_range = TimeRange.model_validate({"period": confident_period})
             if deterministic_range != spec.time_range:
                 spec = spec.model_copy(update={"time_range": deterministic_range})
                 trace = ModelTrace("deterministic_guardrail", "relative_period_guardrail_v1", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
@@ -396,15 +391,39 @@ def rule_based_plan(question: str) -> QuerySpec:
     return QuerySpec.model_validate(payload)
 
 
-def _time_range_from_question(text: str) -> dict[str, str]:
-    relative = re.search(r"\blast\s+(?:\d+\s+)?(?:complete\s+)?(?:hours?|days?|weeks?|months?|years?)\b", text)
+def _confident_relative_period(text: str) -> str | None:
+    """Extract a period phrase for canonical relative/current-period wording.
+
+    Returns None when the question doesn't use one of these forms, so callers
+    can fall back to explicit-date extraction or a default instead of forcing
+    an unrelated period onto a question that never mentioned one.
+    """
+    relative = re.search(r"\b(?:last|past)\s+(?:\d+\s+)?(?:complete\s+)?(?:hours?|days?|weeks?|months?|years?)\b", text)
     if relative:
-        return {"period": relative.group(0)}
-    current = re.search(r"\b(?:this month|current month|latest available|latest month)\b", text)
-    if current:
-        return {"period": current.group(0)}
+        return relative.group(0)
+    if re.search(r"\btoday\b", text):
+        return "today"
+    if re.search(r"\byesterday\b", text):
+        return "yesterday"
+    if re.search(r"\b(?:this|current)\s+week\b", text):
+        return "this week"
+    current_month = re.search(r"\b(?:this month|current month|latest available|latest month)\b", text)
+    if current_month:
+        return current_month.group(0)
+    if re.search(
+        r"\b(?:this|current)\s+year\b|\byear\s+to\s+date\b|\bytd\b|\b(?:start|beginning)\s+of\s+(?:the\s+)?year\b",
+        text,
+    ):
+        return "this year"
     if any(term in text for term in ("over years", "by year", "across years", "all years")):
-        return {"period": "all available"}
+        return "all available"
+    return None
+
+
+def _time_range_from_question(text: str) -> dict[str, str]:
+    confident = _confident_relative_period(text)
+    if confident:
+        return {"period": confident}
     month_names = {name.casefold(): number for number, name in enumerate(calendar.month_name) if name}
     month_names.update({name.casefold(): number for number, name in enumerate(calendar.month_abbr) if name})
     names = "|".join(sorted(month_names, key=len, reverse=True))
