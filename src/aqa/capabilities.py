@@ -162,6 +162,8 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
                 continue
             if method in {"segmented trend comparison", "change-point detection", "robust/monotonic regression", "compound seasonal/cohort analysis", "derived temporal statistics"} and _advanced_temporal_supported(text):
                 continue
+            if method == "change-point detection" and _changepoint_detection_supported(text):
+                continue
             if method in {"derived temporal statistics", "year-over-year country ranking", "bootstrap uncertainty", "compound seasonal/cohort analysis", "compound year-over-year attribution"} and _derived_temporal_supported(text):
                 continue
             if method in {"cross-pollutant derived comparison", "compound seasonal/cohort analysis",
@@ -316,6 +318,21 @@ def _coverage_sensitivity_supported(text: str) -> bool:
     if not ("coverage" in text and re.search(r"sensitiv", text)):
         return False
     return len(re.findall(r"\d+(?:\.\d+)?\s*%", text)) >= 2
+
+
+def _changepoint_detection_supported(text: str) -> bool:
+    """A single-area daily-series changepoint request (TemporalAnalytics).
+
+    Excludes the multi-country "regime changes" compound already handled by
+    _advanced_temporal_supported, which needs trend/seasonality/change-point
+    analysis combined across a whole cohort rather than one area's single
+    strongest breakpoint.
+    """
+    if not re.search(r"change[- ]?point", text):
+        return False
+    return not any(term in text for term in (
+        "regime", "seven primary", "each country", "every country", "all countries", "primary countries",
+    ))
 
 
 def _rank_stability_supported(text: str) -> bool:
