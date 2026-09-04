@@ -18,7 +18,7 @@ A running instance is available for reviewers at
 It serves the same code as this repository, over the full global dataset
 described below.
 
-Known limitations, both confirmed against the raw ingested data rather than
+Known limitations, all confirmed against the raw ingested data rather than
 assumed:
 - The India (CPCB) source has been unreachable from the hosting server since
   2026-05-31, so its data is frozen at that date. Questions that name an India
@@ -30,10 +30,19 @@ assumed:
   Questions about US O3 in that window will likewise return an explicit
   limitation rather than a computed answer. Other EPA pollutants and other
   months are unaffected.
+- The India (CPCB) source has no directly measured (`value_status=observed`)
+  values at all for January through May 2026, across all six monitored
+  pollutants -- every row in that window is either `imputed_legacy_unrestricted`
+  or `invalid_negative_imputation`. Directly-measured-only questions about
+  India in that window (for example, observed-only vs. imputed comparisons,
+  or the hour-of-day by day-of-week heatmap) will return an explicit
+  limitation or an empty/fully-masked result rather than a fabricated
+  measurement; questions that accept policy-approved filled values are
+  unaffected. December 2025 and earlier has normal observed coverage.
 
-Both reflect the system's data-quality safeguards working as intended -- an
-honest "not available" rather than a fabricated number -- not a computation
-error. All other datasets and pollutants are current.
+All three reflect the system's data-quality safeguards working as intended --
+an honest "not available" rather than a fabricated number -- not a
+computation error. All other datasets and pollutants are current.
 
 ## Design
 
