@@ -9,14 +9,27 @@ from .errors import ValidationError
 
 def resolve_period(period: str, available_end: datetime) -> tuple[datetime, datetime]:
     text = period.strip().casefold()
+    start_of_available_day = available_end.replace(hour=0, minute=0, second=0, microsecond=0)
     if text in {"last month", "latest month"}:
         start = available_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         return start, available_end
     if text in {"this month", "current month", "latest available"}:
         return available_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0), available_end
-    match = re.fullmatch(r"last\s+(\d+)\s+(?:complete\s+)?(hours?|days?|weeks?|months?|years?)", text)
+    if text in {"today", "current day"}:
+        return start_of_available_day, available_end
+    if text == "yesterday":
+        yesterday = start_of_available_day - timedelta(days=1)
+        return yesterday, yesterday.replace(hour=23, minute=59, second=59)
+    if text in {"this week", "current week"}:
+        return start_of_available_day - timedelta(days=start_of_available_day.weekday()), available_end
+    if text in {
+        "this year", "current year", "year to date", "ytd",
+        "start of year", "start of the year", "beginning of year", "beginning of the year",
+    }:
+        return available_end.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0), available_end
+    match = re.fullmatch(r"(?:last|past)\s+(?:(\d+)\s+)?(?:complete\s+)?(hours?|days?|weeks?|months?|years?)", text)
     if match:
-        count, unit = int(match.group(1)), match.group(2)
+        count, unit = int(match.group(1)) if match.group(1) else 1, match.group(2)
         if count > 1000:
             raise ValidationError("Relative period is too large")
         if unit.startswith("hour"):

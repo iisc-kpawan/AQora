@@ -30,6 +30,21 @@ def test_rule_planner_rank_and_quality():
     assert quality.metrics[0].value == "coverage"
 
 
+def test_rule_planner_resolves_bare_last_year_and_this_month():
+    spec = rule_based_plan("Average PM2.5 in Delhi last year")
+    assert spec.time_range.period == "last year"
+    spec = rule_based_plan("Average PM2.5 in Delhi this month")
+    assert spec.time_range.period == "this month"
+
+
+def test_rule_planner_resolves_today_yesterday_and_this_year():
+    assert rule_based_plan("Average PM2.5 in Delhi today").time_range.period == "today"
+    assert rule_based_plan("Average PM2.5 in Delhi yesterday").time_range.period == "yesterday"
+    assert rule_based_plan("Average PM2.5 in Delhi this year").time_range.period == "this year"
+    assert rule_based_plan("Average PM2.5 in Delhi year to date").time_range.period == "this year"
+    assert rule_based_plan("Average PM2.5 in Delhi past 5 years").time_range.period == "past 5 years"
+
+
 def test_rule_planner_understands_aqi_over_years():
     spec = rule_based_plan("chennai aqi over years")
     assert spec.operation.value == "aqi"
