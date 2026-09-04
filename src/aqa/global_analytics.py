@@ -15,6 +15,7 @@ from .capabilities import CapabilityAssessment, is_flexible_country_cohort
 from .config import load_config
 from .errors import DataUnavailableError
 from .lakehouse_catalog import LakehouseCatalog
+from .periods import resolve_period
 
 
 POLLUTANTS = (
@@ -25,6 +26,12 @@ POLLUTANTS = (
 MONTHS = {name.casefold(): number for number, name in enumerate(calendar.month_name) if name}
 MONTHS.update({name.casefold(): number for number, name in enumerate(calendar.month_abbr) if name})
 CITY_TERMS = ("delhi", "mumbai", "chennai", "kolkata", "bengaluru", "bangalore", "beijing", "shanghai", "guangzhou", "shenzhen", "london", "seoul")
+METRIC_LABELS = {
+    "mean": "average", "median": "median", "max": "maximum", "min": "minimum",
+    "std": "standard deviation", "variance": "variance", "p05": "5th percentile",
+    "p25": "25th percentile", "p75": "75th percentile", "p95": "95th percentile",
+    "count": "count", "coverage": "coverage",
+}
 
 
 class GlobalAnalytics:
@@ -62,7 +69,12 @@ class GlobalAnalytics:
             value_status="observed" if observed_only else "any",
             minimum_coverage=_percentage_constraint(text),
             minimum_stations=_station_constraint(text),
-            require_all_months=not flexible_cohort,
+            # A single named country should clip to whatever is available, the
+            # same as a city-level query, rather than fail outright just because
+            # the most recent (still-partial) month isn't fully in yet; only a
+            # genuine multi-country comparison needs every month present so the
+            # countries are compared over an identical period.
+            require_all_months=not flexible_cohort and len(selected) > 1,
         )
         exclusions = [item for item in cohort if not item.included]
         exclusion_counts = dict(Counter(item.reason_code for item in exclusions if item.reason_code))
@@ -89,7 +101,11 @@ class GlobalAnalytics:
         value = "observed_value" if observed_only else "analysis_value"
         asks_series = any(term in text for term in ("daily", "by day", "hourly", "by hour", "month by month", "by month", "trend", "over time"))
         daily_extreme_ranking = assessment.intent == "ranking" and bool(re.search(r"\bdaily\s+(?:maximum|max)\b", text))
-        whole_period = (assessment.intent in {"ranking", "comparison"} and not daily_extreme_ranking) or (assessment.intent == "statistics" and not asks_series) or resolution == "yearly" and start.year == end.year
+        # A plain single-country "statistics" question should behave like the
+        # city-level path (a full time-series breakdown), not collapse to one
+        # row; only a genuine multi-country comparison/ranking wants one number
+        # per country instead of a chart-worthy series.
+        whole_period = (assessment.intent in {"ranking", "comparison"} and not daily_extreme_ranking) or (assessment.intent == "statistics" and not asks_series and len(selected) > 1) or resolution == "yearly" and start.year == end.year
         bucket_expression = "TIMESTAMP '1970-01-01'" if whole_period else f"date_trunc('{bucket}', timestamp_local)"
         expected_hours = max(1, int((end - start).total_seconds() // 3600) + 1) if whole_period else {
             "hourly": 1, "daily": 24, "monthly": 744, "yearly": 8760,
@@ -214,20 +230,25 @@ class GlobalAnalytics:
         }
 
 
-def _period(text: str, catalog: LakehouseCatalog, datasets: list[str]) -> tuple[datetime, datetime]:
-    relative = re.search(r"\blast\s+(\d+)\s+complete months?\b", text)
+def _period(
+    text: str, catalog: LakehouseCatalog, datasets: list[str], now: datetime | None = None,
+) -> tuple[datetime, datetime]:
+    # Relative/current-period phrases resolve the same way as the main analytics
+    # engine (real current time, per resolve_period's rules), not a bespoke parser
+    # here that silently fell back to "the latest reporting month" for anything
+    # it didn't recognize -- which used to include "last year", "today", etc.
+    now = now or datetime.now()
+    relative = re.search(
+        r"\b(?:last|past)\s+(?:\d+\s+)?(?:complete\s+)?(?:hours?|days?|weeks?|months?|years?)\b"
+        r"|\btoday\b|\byesterday\b|\b(?:this|current)\s+(?:week|month|year)\b"
+        r"|\byear\s+to\s+date\b|\bytd\b|\b(?:start|beginning)\s+of\s+(?:the\s+)?year\b"
+        r"|\blatest\s+(?:month|available)\b",
+        text,
+    )
     if relative:
         selected = catalog.selected(datasets)
         available_end = max(item.available_end for item in selected)
-        end_month = available_end.month - 1 or 12
-        end_year = available_end.year if available_end.month > 1 else available_end.year - 1
-        count = int(relative.group(1))
-        start_index = end_year * 12 + (end_month - 1) - (count - 1)
-        start_year, start_zero_month = divmod(start_index, 12)
-        return (
-            datetime(start_year, start_zero_month + 1, 1),
-            datetime(end_year, end_month, calendar.monthrange(end_year, end_month)[1], 23, 59, 59),
-        )
+        return resolve_period(relative.group(0), available_end, now)
     names = "|".join(sorted(MONTHS, key=len, reverse=True))
     shared_year = re.search(rf"\b({names})\s*(?:through|to|and|[–-])\s*({names})\s+(20\d{{2}})\b", text)
     if shared_year:
@@ -259,11 +280,15 @@ def _period(text: str, catalog: LakehouseCatalog, datasets: list[str]) -> tuple[
 
 
 def _resolution(text: str) -> str:
+    # Bare "year"/"month" also appear inside relative-period phrases ("last
+    # year", "this month", "year to date") that specify a time range, not a
+    # bucketing resolution; match the same specific phrasing the city-level
+    # rule-based planner uses so those aren't misread as "yearly"/"monthly".
     if "hour" in text or "time of day" in text:
         return "hourly"
-    if "year" in text or "annual" in text:
+    if any(term in text for term in ("annual", "yearly", "by year", "across years", "over years")):
         return "yearly"
-    if "month" in text:
+    if "monthly" in text or "month by month" in text or "by month" in text:
         return "monthly"
     return "daily"
 
@@ -328,7 +353,18 @@ def _answer(question: str, intent: str, rows: list[dict], metric: str, pollutant
         row = rows[0]
         answer = f"The equal-weight station {metric} {pollutant} concentration in {row['country']} was {row[metric]:.2f} {unit} during {period}, using {provenance}."
     else:
-        answer = f"I calculated {len(rows)} country-period {pollutant} results for {period} using {provenance}."
+        values = [row[metric] for row in rows if row.get(metric) is not None]
+        overall = sum(values) / len(values)
+        highest, lowest = max(rows, key=lambda row: row[metric]), min(rows, key=lambda row: row[metric])
+        metric_label = METRIC_LABELS.get(metric, metric)
+        highest_date = datetime.fromisoformat(highest["timestamp"]).strftime("%d %b %Y")
+        lowest_date = datetime.fromisoformat(lowest["timestamp"]).strftime("%d %b %Y")
+        answer = (
+            f"From {period}, the {metric_label} {pollutant} in {rows[0]['country']} was {overall:.2f} {unit} "
+            f"(daily values ranged from {lowest[metric]:.2f} {unit} on {lowest_date} "
+            f"to {highest[metric]:.2f} {unit} on {highest_date}), using {provenance}. "
+            f"The result contains {len(rows)} periods."
+        )
     constraints = []
     if minimum_coverage is not None:
         constraints.append(f"at least {minimum_coverage:.0%} coverage")

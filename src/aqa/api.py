@@ -10,7 +10,7 @@ import httpx
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from .agent import ConversationalAgent
 from .analytics import AnalyticsEngine
@@ -21,10 +21,16 @@ from .queryspec import QuerySpec
 from .lakehouse_catalog import LakehouseCatalog
 
 
+class ChatContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    locations: list[str] | None = None
+
+
 class ChatRequest(BaseModel):
     question: str
     provider: str | None = None
     model: str | None = None
+    context: ChatContext | None = None
 
 
 class ForecastRequest(BaseModel):
@@ -62,13 +68,27 @@ def create_app() -> FastAPI:
             "countries": len(datasets), "scope": "global_lakehouse",
         }
 
+    @app.get("/api/data_coverage")
+    def data_coverage():
+        datasets = LakehouseCatalog().datasets
+        rows = [
+            {
+                "dataset": item.dataset, "country_code": item.country_code, "country_name": item.country_name,
+                "available_start": item.available_start.isoformat(), "available_end": item.available_end.isoformat(),
+            }
+            for item in datasets
+        ]
+        rows.sort(key=lambda row: row["country_name"])
+        return {"rows": rows}
+
     @app.post("/api/query")
     def query(spec: QuerySpec):
         return analytics.execute(spec)
 
     @app.post("/api/chat")
     def chat(request: ChatRequest):
-        return agent.ask(request.question, provider=request.provider, model=request.model)
+        context = request.context.model_dump(mode="json") if request.context else None
+        return agent.ask(request.question, provider=request.provider, model=request.model, context=context)
 
     @app.get("/api/models")
     def models():

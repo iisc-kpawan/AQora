@@ -63,10 +63,14 @@ class CapabilityAssessment:
     unsupported_places: list[str] = field(default_factory=list)
     unavailable_periods: list[str] = field(default_factory=list)
     unsupported_methods: list[str] = field(default_factory=list)
+    location_ambiguous: bool = False
 
     @property
     def can_execute(self) -> bool:
-        return not (self.unsupported_places or self.unavailable_periods or self.unsupported_methods)
+        return not (
+            self.unsupported_places or self.unavailable_periods
+            or self.unsupported_methods or self.location_ambiguous
+        )
 
 
 def classify_intent(question: str) -> str:
@@ -172,9 +176,6 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
             assessment.unsupported_methods.append(method)
     if "observed-only" in text and any(city in text for city in ("delhi", "beijing", "london", "mexico city", "bengaluru", "chennai", "seoul")):
         assessment.unsupported_methods.append("city-level observed/imputed provenance analytics")
-    if not assessment.supported_datasets and not assessment.unsupported_places:
-        assessment.supported_datasets = ["CPCB"]
-    requested_end = requested_period_end(question)
     flexible_country_cohort = (
         is_flexible_country_cohort(question, assessment.intent)
         or _forecast_portfolio_supported(text) or _advanced_visualization_supported(text)
@@ -185,6 +186,18 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
         or _advanced_aqi_supported(text)
         or _burden_episode_supported(text)
     )
+    if not assessment.supported_datasets and not assessment.unsupported_places:
+        if assessment.intent == "metadata" or flexible_country_cohort:
+            # Conceptual/global metadata questions, and operations that compute
+            # their own flexible cross-country cohort, are meaningful without
+            # naming a single country; keep the existing concrete default.
+            assessment.supported_datasets = ["CPCB"]
+        else:
+            # No country or city was named at all -- do not silently guess one
+            # (this previously always defaulted to India/CPCB regardless of what,
+            # if anything, was discussed earlier in the conversation).
+            assessment.location_ambiguous = True
+    requested_end = requested_period_end(question)
     if requested_end and not flexible_country_cohort:
         for dataset in assessment.supported_datasets:
             _, available_end = available_bounds(dataset, config)
