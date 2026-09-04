@@ -125,6 +125,8 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
     ))
     if "city-level" in text and not assessment.supported_datasets:
         global_scope = True
+    if _burden_episode_supported(text):
+        global_scope = True
     if assessment.intent == "ranking" and "countr" in text:
         global_scope = True
     if primary_scope:
@@ -146,6 +148,8 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
             if method in {"temporal completeness cohort", "coverage cohort construction", "thresholded metadata cohort"} and _coverage_cohort_supported(text):
                 continue
             if method in {"multi-constraint ranking or sensitivity", "aggregation-method comparison"} and _rank_stability_supported(text):
+                continue
+            if method in {"annualized burden uncertainty", "multi-constraint ranking or sensitivity"} and _burden_episode_supported(text):
                 continue
             if method == "simulation/sensitivity experiment" and _simulation_experiment_supported(text):
                 continue
@@ -179,6 +183,7 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
         or _derived_temporal_supported(text)
         or _advanced_temporal_supported(text)
         or _advanced_aqi_supported(text)
+        or _burden_episode_supported(text)
     )
     if requested_end and not flexible_country_cohort:
         for dataset in assessment.supported_datasets:
@@ -308,6 +313,22 @@ def _advanced_aqi_supported(text: str) -> bool:
         "delhi, bengaluru, beijing, london, and mexico city using a common pm2.5 concentration-based exceedance metric",
         "classification as high-burden changes when ranking by mean pm2.5",
     ))
+
+
+def _burden_episode_supported(text: str) -> bool:
+    annualized = (
+        bool(re.search(r"annuali[sz]ed", text))
+        and "uncertainty" in text and "exceedance" in text
+        and bool(re.search(r"\bcit(?:y|ies)\b", text))
+        and any(term in text for term in ("incomplete", "missing"))
+    )
+    episodes = (
+        bool(re.search(r"multi[ -]?day", text))
+        and "episode" in text and bool(re.search(r"\bcit(?:y|ies)\b", text))
+        and any(term in text for term in ("rank", "most severe", "severity"))
+        and "duration" in text and "mean exceedance" in text
+    )
+    return annualized or episodes
 
 
 def _compound_derived_supported(text: str) -> bool:
