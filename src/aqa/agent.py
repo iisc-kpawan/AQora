@@ -135,8 +135,33 @@ class ConversationalAgent:
         self.compound_analytics = CompoundAnalytics(self.config)
         self.burden_episode_analytics = BurdenEpisodeAnalytics(self.config)
 
-    def ask(self, question: str, *, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
+    def ask(
+        self, question: str, *, provider: str | None = None, model: str | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         assessment = assess_question(question, self.config)
+        inherited_location_note = None
+        if assessment.location_ambiguous:
+            candidate_locations = (context or {}).get("locations") or []
+            if len(candidate_locations) == 1:
+                inherited_location = candidate_locations[0]
+                augmented_question = f"For {inherited_location}: {question}"
+                reassessed = assess_question(augmented_question, self.config)
+                if not reassessed.location_ambiguous:
+                    question, assessment = augmented_question, reassessed
+                    inherited_location_note = (
+                        f"(Continuing about {inherited_location} from your previous question, "
+                        "since this one didn't name a location.) "
+                    )
+        result = self._ask_dispatch(question, assessment, provider=provider, model=model)
+        if inherited_location_note and result.get("kind") != "limitation":
+            result["answer"] = inherited_location_note + result["answer"]
+        return result
+
+    def _ask_dispatch(
+        self, question: str, assessment: CapabilityAssessment, *,
+        provider: str | None = None, model: str | None = None,
+    ) -> dict[str, Any]:
         metadata_period_audit = (
             assessment.intent == "metadata" and assessment.unavailable_periods
             and not assessment.unsupported_places and not assessment.unsupported_methods

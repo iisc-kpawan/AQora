@@ -10,7 +10,7 @@ import httpx
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from .agent import ConversationalAgent
 from .analytics import AnalyticsEngine
@@ -21,10 +21,16 @@ from .queryspec import QuerySpec
 from .lakehouse_catalog import LakehouseCatalog
 
 
+class ChatContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    locations: list[str] | None = None
+
+
 class ChatRequest(BaseModel):
     question: str
     provider: str | None = None
     model: str | None = None
+    context: ChatContext | None = None
 
 
 class ForecastRequest(BaseModel):
@@ -81,7 +87,8 @@ def create_app() -> FastAPI:
 
     @app.post("/api/chat")
     def chat(request: ChatRequest):
-        return agent.ask(request.question, provider=request.provider, model=request.model)
+        context = request.context.model_dump(mode="json") if request.context else None
+        return agent.ask(request.question, provider=request.provider, model=request.model, context=context)
 
     @app.get("/api/models")
     def models():
