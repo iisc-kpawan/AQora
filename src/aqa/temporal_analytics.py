@@ -85,6 +85,10 @@ class TemporalAnalytics:
             minimum_segment_days = int(self.config.get("analytics", {}).get("changepoint_minimum_segment_days", 30))
             rows = _changepoints(self._daily(selected, cities, pollutant, start, end), minimum_segment_days)
             visualization = "line"
+        elif operation == "hour_by_weekday":
+            minimum_cell_samples = int(self.config.get("analytics", {}).get("heatmap_minimum_cell_samples", 3))
+            rows = self._hour_by_weekday_profile(selected, cities, pollutant, start, end, minimum_cell_samples)
+            visualization = "heatmap_grid"
         else:
             rows = self._monthly(selected, cities, pollutant, start, end)
             if operation == "slope": rows = _slopes(rows)
@@ -115,8 +119,9 @@ class TemporalAnalytics:
                 "dataset": "GLOBAL_TEMPORAL" if len(candidates) > 1 else candidates[0].dataset,
                 "operation": operation, "geography_level": geography, "locations": cities or [item.country_name for item in candidates],
                 "pollutants": [pollutant], "time_range": {"start": start.isoformat(), "end": end.isoformat()},
-                "resolution": "hourly" if operation in {"hour_of_day", "joint_weekday_diurnal", "day_night"} else "daily" if operation in {"day_of_week", "weekday_weekend", "moving_average", "daily_series", "changepoint"} else "monthly",
-                "metrics": ["before_mean", "after_mean", "mean_shift"] if operation == "changepoint" else ["mean"],
+                "resolution": "hourly" if operation in {"hour_of_day", "joint_weekday_diurnal", "day_night", "hour_by_weekday"} else "daily" if operation in {"day_of_week", "weekday_weekend", "moving_average", "daily_series", "changepoint"} else "monthly",
+                "metrics": (["before_mean", "after_mean", "mean_shift"] if operation == "changepoint" else
+                            ["mean", "sample_count"] if operation == "hour_by_weekday" else ["mean"]),
                 "filters": {},
             },
             "resolved_period": {"start": start.isoformat(), "end": end.isoformat(),
@@ -125,14 +130,21 @@ class TemporalAnalytics:
             "metadata": {
                 "dataset": "GLOBAL_TEMPORAL", "geography_level": geography,
                 "station_count": max((row.get("active_station_count") or 0 for row in rows), default=0),
-                "value_status": "observed" if operation == "joint_weekday_diurnal" else "observed_and_policy_approved_filled", "station_balanced": True,
+                "value_status": "observed" if operation in {"joint_weekday_diurnal", "hour_by_weekday"} else "observed_and_policy_approved_filled", "station_balanced": True,
                 "latency_ms": round((time.perf_counter() - started) * 1000, 2), "warnings": [],
             },
-            "visualization": {"type": visualization},
+            "visualization": (
+                {"type": "heatmap_grid", "x": "hour_of_day", "y": "day_of_week", "z": "mean", "mask": "masked",
+                 "hover_fields": ["sample_count", "mask_reason"], "color_title": f"{pollutant} µg/m³"}
+                if operation == "hour_by_weekday" else {"type": visualization}
+            ),
             "analysis": {"operator": "area_temporal_v1", "method": operation, "exclusions": exclusion_rows,
                          "joint_timestamp_basis": "UTC hour floor" if operation == "joint_weekday_diurnal" else None,
                          **({"change_point_method": "minimum two-segment squared error",
-                             "minimum_segment_days": rows[0]["minimum_segment_days"]} if operation == "changepoint" else {})},
+                             "minimum_segment_days": rows[0]["minimum_segment_days"]} if operation == "changepoint" else {}),
+                         **({"minimum_cell_samples": rows[0]["minimum_cell_samples"],
+                             "masked_cell_count": sum(row["masked"] for row in rows),
+                             "total_cell_count": len(rows)} if operation == "hour_by_weekday" else {})},
             "answer": answer, "display_title": f"{pollutant} · temporal analysis",
             "model_trace": {"provider": "deterministic", "model": "area_temporal_v1", "latency_ms": 0,
                             "prompt_tokens": None, "completion_tokens": None, "fallback_used": False},
@@ -306,6 +318,56 @@ class TemporalAnalytics:
             names=[x[0] for x in result.description]; return [dict(zip(names,row)) for row in result.fetchall()]
         finally: connection.close()
 
+    def _hour_by_weekday_profile(self, selected, cities, pollutant, start, end, minimum_cell_samples) -> list[dict]:
+        paths = [str(path) for item in selected for path in (self.root / "query" / "hourly" / f"dataset={item.dataset}").glob("year=*/month=*/*.parquet")]
+        if not paths: return []
+        control = duckdb.connect(str(self.catalog.control_path), read_only=True)
+        try: dimension = control.execute("SELECT dataset,source_station_id,city,country_name FROM station_dimension").fetchdf()
+        finally: control.close()
+        ids = {item.dataset for item in selected}; dimension = dimension[dimension["dataset"].isin(ids)].copy()
+        if cities:
+            wanted = {_city_alias(item) for item in cities}
+            dimension = dimension[dimension["city"].fillna("").map(_city_alias).isin(wanted)]
+            dimension["area_name"] = dimension["city"]
+        else: dimension["area_name"] = dimension["country_name"]
+        connection = duckdb.connect(); connection.register("temporal_stations", dimension[["dataset","source_station_id","area_name"]])
+        try:
+            # Observed-only, unlike _hour_profile (which blends in policy-approved
+            # fills via analysis_value) -- this operation's whole point is a
+            # directly-measured diurnal-by-weekday picture, not a filled one.
+            result = connection.execute("""
+                WITH station_hour AS (
+                  SELECT t.area_name,h.source_station_id,h.timestamp_local,
+                         avg(h.observed_value) FILTER(WHERE h.value_status='observed' AND h.observed_value>=0) station_value,
+                         any_value(h.unit) unit
+                  FROM read_parquet(?,hive_partitioning=true,union_by_name=true) h
+                  JOIN temporal_stations t ON h.dataset=t.dataset AND h.source_station_id=t.source_station_id
+                  WHERE h.pollutant=? AND h.timestamp_local BETWEEN ? AND ?
+                  GROUP BY t.area_name,h.source_station_id,h.timestamp_local
+                ), area_hour AS (
+                  SELECT area_name,timestamp_local,avg(station_value) mean,count(station_value) active_station_count,any_value(unit) unit
+                  FROM station_hour WHERE station_value IS NOT NULL GROUP BY area_name,timestamp_local
+                )
+                SELECT area_name,isodow(timestamp_local) day_number,hour(timestamp_local) hour_of_day,
+                       avg(mean) mean,count(*) sample_count,
+                       max(active_station_count) active_station_count,any_value(unit) unit
+                FROM area_hour GROUP BY area_name,day_number,hour_of_day
+                ORDER BY area_name,day_number,hour_of_day
+            """, [paths,pollutant,start,end])
+            names=[x[0] for x in result.description]; rows=[dict(zip(names,row)) for row in result.fetchall()]
+        finally: connection.close()
+        day_names = {1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday", 5: "Friday", 6: "Saturday", 7: "Sunday"}
+        for row in rows:
+            row["day_of_week"] = day_names[row["day_number"]]
+            row["day_number"] -= 1  # 0 (Monday) - 6 (Sunday), matching _day_profile's convention
+            row["unmasked_mean"] = row["mean"]
+            row["masked"] = row["sample_count"] < minimum_cell_samples
+            row["mask_reason"] = f"fewer than {minimum_cell_samples} observed hours" if row["masked"] else None
+            if row["masked"]:
+                row["mean"] = None
+            row["minimum_cell_samples"] = minimum_cell_samples
+        return rows
+
 
 def _query_area(paths, cities, pollutant, start, end, timestamp_column, geography) -> list[dict]:
     if not paths: return []
@@ -329,6 +391,7 @@ def _query_area(paths, cities, pollutant, start, end, timestamp_column, geograph
 def _operation(text: str) -> str:
     if "jointly observed" in text and ("diurnal" in text or "hour" in text): return "joint_weekday_diurnal"
     if ("daytime" in text and "nighttime" in text) or "day versus night" in text: return "day_night"
+    if re.search(r"hour-of-day\s+by\s+day-of-week|hour\s+of\s+day\s+by\s+day\s+of\s+week", text): return "hour_by_weekday"
     if "weekday" in text and "weekend" in text: return "weekday_weekend"
     if "hour-of-day" in text or "hour of day" in text or "diurnal" in text: return "hour_of_day"
     if "day-of-week" in text or "day of week" in text: return "day_of_week"
@@ -496,6 +559,15 @@ def _answer(rows,operation,pollutant,start,end):
         return (
             f"For {period}, I searched for the single daily-mean breakpoint that minimizes combined before/after "
             f"squared error, requiring at least {rows[0]['minimum_segment_days']} days on each side. " + " ".join(parts)
+        )
+    if operation=="hour_by_weekday":
+        areas=sorted({row["area_name"] for row in rows})
+        masked_count=sum(row["masked"] for row in rows)
+        return (
+            f"For {period}, I built a directly-measured {pollutant} hour-of-day by day-of-week grid "
+            f"(24 hours × 7 weekdays = {len(rows)} cells) for {', '.join(areas)}. "
+            f"{masked_count} of {len(rows)} cells have fewer than {rows[0]['minimum_cell_samples']} observed hours "
+            "and are marked as masked rather than shown as a computed value."
         )
     labels={"hour_of_day":"hour-of-day profile","joint_weekday_diurnal":"jointly observed weekday diurnal profile","day_night":"daytime/nighttime comparison","day_of_week":"day-of-week profile","weekday_weekend":"weekday/weekend comparison","moving_average":"moving-average series","percent_change":"month-over-month changes","highest_months":"highest-month ranking","daily_series":"daily series","monthly_series":"monthly series"}
     return f"I calculated {len(rows)} {pollutant} {labels.get(operation,operation)} results for {period} using equal-station area values."
