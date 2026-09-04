@@ -286,6 +286,12 @@ def limitation_result(
     extra_reason: str | None = None,
 ) -> dict[str, Any]:
     reasons = []
+    if assessment.location_ambiguous:
+        reasons.append(
+            "No country or city was named in the question, so I can't determine which dataset to use. "
+            "This system does not carry context between questions -- please name a location explicitly "
+            "(e.g. \"Delhi\", \"China\", \"United Kingdom\") in every question that needs one."
+        )
     if assessment.unsupported_places:
         reasons.append("The requested geography is not loaded: " + ", ".join(assessment.unsupported_places) + ".")
     if assessment.unavailable_periods:
