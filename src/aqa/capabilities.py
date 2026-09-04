@@ -174,7 +174,9 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
                 continue
             if method in {"annualized burden uncertainty", "multi-constraint ranking or sensitivity"} and _burden_episode_supported(text):
                 continue
-            if method == "simulation/sensitivity experiment" and _simulation_experiment_supported(text):
+            if method == "simulation/sensitivity experiment" and (
+                _simulation_experiment_supported(text) or _coverage_sensitivity_supported(text)
+            ):
                 continue
             if method == "specialized multi-view visualization" and _advanced_visualization_supported(text):
                 continue
@@ -297,6 +299,23 @@ def _simulation_experiment_supported(text: str) -> bool:
         "apparent year-over-year pm2.5 improvement in india",
         "india experienced meaningful pm2.5 improvement over the last 12 complete months",
     ))
+
+
+def _coverage_sensitivity_supported(text: str) -> bool:
+    """A plain area-mean-versus-coverage-threshold sensitivity request.
+
+    Kept narrow so it never intercepts the harder compound cases that
+    ADVANCED_METHODS already routes elsewhere: an observed/imputed policy
+    angle belongs to ProvenanceAnalytics, and a ranking angle belongs to the
+    rank-stability/multi-constraint methods.
+    """
+    if any(term in text for term in ("imputed", "filled", "observed-only", "observed only")):
+        return False
+    if any(term in text for term in ("rank", "ranking")):
+        return False
+    if not ("coverage" in text and re.search(r"sensitiv", text)):
+        return False
+    return len(re.findall(r"\d+(?:\.\d+)?\s*%", text)) >= 2
 
 
 def _rank_stability_supported(text: str) -> bool:

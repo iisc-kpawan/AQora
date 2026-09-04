@@ -11,7 +11,7 @@ from typing import Any
 import duckdb
 
 from .aqi import DEFAULT_GUIDELINE, get_guideline
-from .capabilities import CapabilityAssessment, is_flexible_country_cohort
+from .capabilities import CapabilityAssessment, _coverage_sensitivity_supported, is_flexible_country_cohort
 from .config import load_config
 from .errors import DataUnavailableError
 from .global_analytics import POLLUTANTS, _period, _percentage_constraint, _top_n
@@ -30,13 +30,17 @@ class ThresholdAnalytics:
     @staticmethod
     def should_handle(question: str, assessment: CapabilityAssessment) -> bool:
         text = question.casefold()
+        if _coverage_sensitivity_supported(text):
+            return True
         if "aqi" in text and not any(term in text for term in ("guideline", "concentration threshold", "exceedance")):
             return False
         return any(term in text for term in ("exceed", "exceedance", "guideline", "episode"))
 
     def execute(self, question: str, assessment: CapabilityAssessment) -> dict[str, Any]:
-        started = time.perf_counter()
         text = question.casefold()
+        if _coverage_sensitivity_supported(text):
+            return self._coverage_sensitivity(question, assessment)
+        started = time.perf_counter()
         if "station-day" in text or "station day" in text:
             raise DataUnavailableError("Station-day threshold analytics are not enabled yet; the current calculation supports city or country daily averages with equal weight for each monitoring station")
         pollutants = [name for pattern, name in POLLUTANTS if re.search(pattern, text)]
@@ -162,6 +166,101 @@ class ThresholdAnalytics:
                             "prompt_tokens": None, "completion_tokens": None, "fallback_used": False},
         }
 
+    def _coverage_sensitivity(self, question: str, assessment: CapabilityAssessment) -> dict[str, Any]:
+        started = time.perf_counter()
+        text = question.casefold()
+        pollutants = [name for pattern, name in POLLUTANTS if re.search(pattern, text)]
+        if len(pollutants) > 1:
+            raise DataUnavailableError("A coverage-sensitivity request must resolve to one pollutant")
+        pollutant = pollutants[0] if pollutants else "PM25"
+        start, end = _period(text, self.catalog, assessment.supported_datasets)
+        candidates = list(self.catalog.selected(assessment.supported_datasets))
+        cities = _requested_cities(text)
+        geography = "city" if cities else "country"
+        thresholds = _coverage_thresholds_from_text(text, self.config)
+        paths = [
+            str(path) for item in candidates
+            for path in (self.root / "query" / "area_daily" / f"dataset={item.dataset}").glob("year=*/month=*/*.parquet")
+        ]
+        if not paths:
+            raise DataUnavailableError("No recent daily area layer overlaps the requested scope")
+        connection = duckdb.connect()
+        try:
+            result = connection.execute(f"""
+                WITH daily AS (
+                  SELECT dataset, country_name, area_name, bucket_day, mean, coverage, active_station_count, unit
+                  FROM read_parquet(?, hive_partitioning=true, union_by_name=true)
+                  WHERE pollutant=? AND geography_level=? AND bucket_day BETWEEN ? AND ?
+                ), thresholded AS (
+                  SELECT d.*, t.coverage_threshold
+                  FROM daily d CROSS JOIN (VALUES {','.join(f'({value:.12g})' for value in thresholds)}) t(coverage_threshold)
+                  WHERE d.coverage>=t.coverage_threshold
+                )
+                SELECT dataset, any_value(country_name) country, area_name, coverage_threshold,
+                       avg(mean) mean, count(*)::BIGINT valid_day_count,
+                       max(active_station_count)::BIGINT active_station_count, any_value(unit) unit
+                FROM thresholded GROUP BY dataset, area_name, coverage_threshold
+                ORDER BY area_name, coverage_threshold
+            """, [paths, pollutant, geography, start, end])
+            names = [item[0] for item in result.description]
+            rows = [dict(zip(names, row)) for row in result.fetchall()]
+        finally:
+            connection.close()
+        for row in rows:
+            # DuckDB returns the CROSS JOIN's decimal literal as an exact Decimal,
+            # which never compares equal to the plain (inexact) float thresholds
+            # computed in Python -- normalize before any further comparison.
+            row["coverage_threshold"] = float(row["coverage_threshold"])
+        if cities:
+            wanted = {_city_alias(item) for item in cities}
+            rows = [row for row in rows if _city_alias(row["area_name"] or "") in wanted]
+        if not rows:
+            raise DataUnavailableError("No area has any valid day at the requested coverage thresholds")
+        grouped: dict[str, list[dict]] = {}
+        for row in rows:
+            grouped.setdefault(row["area_name"], []).append(row)
+        for area, values in grouped.items():
+            present = {row["coverage_threshold"] for row in values}
+            for threshold in thresholds:
+                if threshold not in present:
+                    values.append({
+                        "dataset": values[0]["dataset"], "country": values[0]["country"], "area_name": area,
+                        "coverage_threshold": threshold, "mean": None, "valid_day_count": 0,
+                        "active_station_count": None, "unit": values[0]["unit"],
+                    })
+            values.sort(key=lambda row: row["coverage_threshold"])
+        rows = [row for values in grouped.values() for row in values]
+        answer = _coverage_sensitivity_answer(rows, pollutant, start, end, thresholds)
+        return {
+            "kind": "analytics",
+            "query_spec": {
+                "dataset": "GLOBAL_AREA_DAILY" if len(candidates) > 1 else candidates[0].dataset,
+                "operation": "coverage_threshold_sensitivity", "geography_level": geography,
+                "locations": cities or sorted({row["country"] for row in rows}), "pollutants": [pollutant],
+                "time_range": {"start": start.isoformat(), "end": end.isoformat()}, "resolution": "period",
+                "metrics": ["mean", "valid_day_count"],
+                "filters": {"coverage_thresholds": thresholds},
+            },
+            "resolved_period": {"start": start.isoformat(), "end": end.isoformat(),
+                                "basis": "explicit period, varying only the daily coverage cutoff"},
+            "data": rows,
+            "metadata": {
+                "dataset": "GLOBAL_AREA_DAILY", "geography_level": geography,
+                "station_count": max((row.get("active_station_count") or 0 for row in rows), default=0),
+                "value_status": "observed_and_policy_approved_filled", "station_balanced": True,
+                "latency_ms": round((time.perf_counter() - started) * 1000, 2), "warnings": [],
+            },
+            "visualization": {"type": "bar" if len(grouped) == 1 else "line",
+                              "x": "coverage_threshold", "y": "mean", "series": "area_name"},
+            "analysis": {
+                "operator": "coverage_threshold_sensitivity_v1", "coverage_thresholds": thresholds,
+                "aggregation": "equal-weighted daily mean at each coverage cutoff",
+            },
+            "answer": answer, "display_title": f"{pollutant} · coverage-threshold sensitivity",
+            "model_trace": {"provider": "deterministic", "model": "coverage_threshold_sensitivity_v1",
+                            "latency_ms": 0, "prompt_tokens": None, "completion_tokens": None, "fallback_used": False},
+        }
+
 
 def _burden(daily: list[dict], threshold: float, pollutant: str) -> list[dict]:
     grouped: dict[tuple, list[dict]] = {}
@@ -246,6 +345,38 @@ def _episode_answer(rows: list[dict], pollutant: str, threshold: float, guidelin
             f"mean exceedance {row['mean_exceedance']:.2f} {row['unit']}, and severity {row['severity']:.2f}. "
             f"It uses the {threshold:g} {row['unit']} {guideline.name} threshold and a {coverage:.0%} daily coverage rule. "
             f"Its contributing values were {row['observed_fraction']:.1%} measured and {row['imputed_fraction']:.1%} policy-approved filled values.")
+
+
+def _coverage_thresholds_from_text(text: str, config: dict) -> list[float]:
+    explicit = sorted({float(value) / 100 for value in re.findall(r"(\d+(?:\.\d+)?)\s*%", text)})
+    explicit = [value for value in explicit if 0 <= value <= 1]
+    if len(explicit) >= 2:
+        return explicit
+    configured = config.get("analytics", {}).get("coverage_sensitivity_thresholds", [.50, .75, .90])
+    return sorted({float(value) for value in configured})
+
+
+def _coverage_sensitivity_answer(rows: list[dict], pollutant: str, start: datetime, end: datetime,
+                                  thresholds: list[float]) -> str:
+    period = f"{start:%d %b %Y} to {end:%d %b %Y}"
+    threshold_text = ", ".join(f"{value:.0%}" for value in thresholds)
+    lines = []
+    for area in sorted({row["area_name"] for row in rows}):
+        values = [row for row in rows if row["area_name"] == area and row["mean"] is not None]
+        if not values:
+            lines.append(f"{area} has no valid day at any of the tested coverage thresholds.")
+            continue
+        detail = "; ".join(
+            f"{row['coverage_threshold']:.0%} coverage: {row['mean']:.2f} {row['unit']} over {row['valid_day_count']} valid days"
+            for row in values
+        )
+        spread = max(row["mean"] for row in values) - min(row["mean"] for row in values)
+        lines.append(f"{area} -- {detail}. Spread across tested thresholds: {spread:.2f} {values[0]['unit']}.")
+    return (
+        f"I recomputed {pollutant}'s mean over {period} at daily coverage thresholds of {threshold_text}, "
+        "keeping only days meeting each cutoff. " + " ".join(lines) +
+        " This is a descriptive sensitivity check, not a formal uncertainty estimate."
+    )
 
 
 def _explicit_threshold(text: str) -> float | None:
