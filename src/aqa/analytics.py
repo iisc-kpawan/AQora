@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import math
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import duckdb
 import pandas as pd
@@ -31,6 +32,8 @@ METRIC_SQL = {
     "count": "count(station_value)",
 }
 
+STALENESS_WARNING_DAYS = 3
+
 
 class AnalyticsEngine:
     def __init__(self, config: dict | None = None, catalog: Catalog | None = None, *, prefer_parquet: bool = True):
@@ -48,10 +51,11 @@ class AnalyticsEngine:
         level = "global" if spec.geography_level == GeographyLevel.global_ else spec.geography_level.value
         cfg = self.config["datasets"][dataset]
         available_start, available_end = self._available_bounds(dataset)
+        now_local = datetime.now(ZoneInfo(cfg["timezone"])).replace(tzinfo=None)
         if spec.time_range.period and spec.time_range.period.casefold() in {"all", "all available", "all years", "over years"}:
             start, end = available_start, available_end
         elif spec.time_range.period:
-            start, end = resolve_period(spec.time_range.period, available_end)
+            start, end = resolve_period(spec.time_range.period, available_end, now_local)
         else:
             start, end = spec.time_range.start, spec.time_range.end
         assert start is not None and end is not None
@@ -63,6 +67,12 @@ class AnalyticsEngine:
         labels = self._labels(spec, stations)
         results: list[dict[str, Any]] = []
         warnings = []
+        if spec.time_range.period and now_local - available_end > timedelta(days=STALENESS_WARNING_DAYS):
+            warnings.append(
+                f"The most recent available {dataset} data is from {available_end:%d %b %Y %H:%M} "
+                f"({(now_local - available_end).days} days behind the current date); more recent "
+                "observations have not yet been ingested."
+            )
         if self.config["analytics"].get("exclude_negative_values", True):
             warnings.append("Negative historical concentrations were excluded as invalid")
         for requested_pollutant in spec.pollutants:

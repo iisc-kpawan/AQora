@@ -7,26 +7,38 @@ from datetime import datetime, timedelta
 from .errors import ValidationError
 
 
-def resolve_period(period: str, available_end: datetime) -> tuple[datetime, datetime]:
+def resolve_period(period: str, available_end: datetime, now: datetime | None = None) -> tuple[datetime, datetime]:
+    """Resolve a period phrase to a (start, end) range.
+
+    "last month"/"last N <unit>"/"latest available" describe a reporting
+    period relative to the newest data this dataset actually has, so they
+    anchor to `available_end`. "today"/"yesterday"/"this week"/"this month"/
+    "this year" name a literal calendar period, so they anchor to `now` (the
+    caller's current time in the dataset's own local timezone) instead —
+    if that calendar period isn't covered by the data, the caller's own
+    available-range clamp turns this into an honest "not available yet"
+    result rather than silently substituting an older period.
+    """
     text = period.strip().casefold()
-    start_of_available_day = available_end.replace(hour=0, minute=0, second=0, microsecond=0)
-    if text in {"last month", "latest month"}:
+    now = now or datetime.now()
+    start_of_now_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if text in {"last month", "latest month", "latest available"}:
         start = available_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         return start, available_end
-    if text in {"this month", "current month", "latest available"}:
-        return available_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0), available_end
     if text in {"today", "current day"}:
-        return start_of_available_day, available_end
+        return start_of_now_day, now
     if text == "yesterday":
-        yesterday = start_of_available_day - timedelta(days=1)
+        yesterday = start_of_now_day - timedelta(days=1)
         return yesterday, yesterday.replace(hour=23, minute=59, second=59)
     if text in {"this week", "current week"}:
-        return start_of_available_day - timedelta(days=start_of_available_day.weekday()), available_end
+        return start_of_now_day - timedelta(days=start_of_now_day.weekday()), now
+    if text in {"this month", "current month"}:
+        return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0), now
     if text in {
         "this year", "current year", "year to date", "ytd",
         "start of year", "start of the year", "beginning of year", "beginning of the year",
     }:
-        return available_end.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0), available_end
+        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0), now
     match = re.fullmatch(r"(?:last|past)\s+(?:(\d+)\s+)?(?:complete\s+)?(hours?|days?|weeks?|months?|years?)", text)
     if match:
         count, unit = int(match.group(1)) if match.group(1) else 1, match.group(2)

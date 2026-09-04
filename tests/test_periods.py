@@ -18,23 +18,30 @@ def test_bare_last_year_and_last_week_resolve_without_a_count():
     assert (end - start).total_seconds() == 167 * 3600
 
 
-def test_today_yesterday_and_this_week_resolve_against_available_end():
-    start, end = resolve_period("today", datetime(2026, 5, 31, 17, 30))
-    assert start == datetime(2026, 5, 31)
-    assert end == datetime(2026, 5, 31, 17, 30)
-    start, end = resolve_period("yesterday", datetime(2026, 5, 31, 17, 30))
-    assert start == datetime(2026, 5, 30)
-    assert end == datetime(2026, 5, 30, 23, 59, 59)
-    start, end = resolve_period("this week", datetime(2026, 5, 31, 17, 30))  # a Sunday
-    assert start == datetime(2026, 5, 25)  # the preceding Monday
-    assert end == datetime(2026, 5, 31, 17, 30)
+def test_today_yesterday_and_this_week_resolve_against_the_real_current_time():
+    now = datetime(2026, 9, 5, 17, 30)  # a Saturday
+    stale_available_end = datetime(2026, 5, 31, 23)  # not used by these phrases at all
+    start, end = resolve_period("today", stale_available_end, now)
+    assert start == datetime(2026, 9, 5)
+    assert end == now
+    start, end = resolve_period("yesterday", stale_available_end, now)
+    assert start == datetime(2026, 9, 4)
+    assert end == datetime(2026, 9, 4, 23, 59, 59)
+    start, end = resolve_period("this week", stale_available_end, now)
+    assert start == datetime(2026, 8, 31)  # the preceding Monday
+    assert end == now
 
 
-def test_this_year_and_synonyms_resolve_to_year_to_date():
+def test_this_month_and_this_year_resolve_against_the_real_current_time():
+    now = datetime(2026, 9, 5, 17, 30)
+    stale_available_end = datetime(2026, 5, 31, 23)
+    start, end = resolve_period("this month", stale_available_end, now)
+    assert start == datetime(2026, 9, 1)
+    assert end == now
     for phrase in ("this year", "current year", "year to date", "ytd", "start of year", "beginning of the year"):
-        start, end = resolve_period(phrase, datetime(2026, 5, 31, 23))
+        start, end = resolve_period(phrase, stale_available_end, now)
         assert start == datetime(2026, 1, 1), phrase
-        assert end == datetime(2026, 5, 31, 23), phrase
+        assert end == now, phrase
 
 
 def test_past_is_a_synonym_for_last():
