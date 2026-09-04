@@ -98,6 +98,25 @@ def classify_intent(question: str) -> str:
     return "statistics"
 
 
+def _implies_global_scope_without_a_handler(text: str) -> bool:
+    """Catches cross-country/global wording the earlier global_scope/
+    primary_scope checks miss (e.g. "for each eligible country" rather than
+    "for each primary network", "every country" rather than "all countries",
+    a cities ranking naming no city, "selected ... cities"). None of these
+    phrasings are backed by an implemented specialized handler today, so the
+    caller reports them as unsupported rather than asking for a location that
+    would not actually resolve anything.
+    """
+    return bool(
+        re.search(r"\bfor\s+each\s+(?:primary|eligible)\s+countr", text)
+        or re.search(r"\bevery\s+countr", text)
+        or re.search(r"\bglobal\s+summary\b", text)
+        or re.search(r"\bcities\s+with\s+at\s+least\b", text)
+        or re.search(r"\b\d+\s+cities\s+with\s+the\s+(?:highest|lowest)\b", text)
+        or re.search(r"\bselected\s+(?:[\w-]+\s+)?cit(?:y|ies)\b", text)
+    )
+
+
 def is_flexible_country_cohort(question: str, intent: str | None = None) -> bool:
     text = question.casefold()
     intent = intent or classify_intent(question)
@@ -192,6 +211,15 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
             # their own flexible cross-country cohort, are meaningful without
             # naming a single country; keep the existing concrete default.
             assessment.supported_datasets = ["CPCB"]
+        elif _implies_global_scope_without_a_handler(text):
+            # The question is unambiguously cross-country/global by its own
+            # wording ("for each country", "every country", a cities ranking
+            # with no city named, "selected ... cities") -- naming a location
+            # would not help, and none of the specialized modules implement
+            # this particular operation, so silently narrowing it to CPCB/CNEMC
+            # (the only datasets the fallback planner knows) would be worse
+            # than saying so isn't supported yet.
+            assessment.unsupported_methods.append("cross-country/global-scope research operation")
         else:
             # No country or city was named at all -- do not silently guess one
             # (this previously always defaulted to India/CPCB regardless of what,
