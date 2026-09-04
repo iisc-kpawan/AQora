@@ -303,6 +303,17 @@ class ConversationalAgent:
             # question always wins over the model's own dataset choice.
             spec = spec.model_copy(update={"dataset": Dataset(expected_dataset)})
             trace = ModelTrace("deterministic_guardrail", "dataset_country_guardrail_v1", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
+        expected_pollutants = _pollutants_from_text(text)
+        if expected_pollutants and spec.pollutants != expected_pollutants:
+            # A model can garble a pollutant mention entirely (e.g. "ozone
+            # levels" planned as the literal pollutant "ozone_levels", which
+            # fails to resolve at all), pick a different one than the question
+            # named, or just leave it in a non-canonical form (e.g. "OZONE"
+            # instead of "O3") that computes correctly but displays inconsistently;
+            # the pollutant(s) actually named in the question always win, in
+            # their canonical form, over the model's own output.
+            spec = spec.model_copy(update={"pollutants": expected_pollutants})
+            trace = ModelTrace("deterministic_guardrail", "pollutant_guardrail_v1", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
         try:
             result = self.analytics.execute(spec)
         except AQAError as exc:
@@ -377,18 +388,7 @@ def rule_based_plan(question: str) -> QuerySpec:
         locations, level = matched, "city"
     if level == "country":
         locations = ["India", "China"] if dataset == "ALL" else ["China" if dataset == "CNEMC" else "India"]
-    pollutants = []
-    pollutant_patterns = (
-        (r"pm\s*2(?:\.|\s*)5|\bpm25\b|pm₂\.₅", "PM25"),
-        (r"\bpm\s*10\b|pm₁₀", "PM10"),
-        (r"\bno\s*2\b|no₂", "NO2"),
-        (r"\bso\s*2\b|so₂", "SO2"),
-        (r"\bo\s*3\b|o₃|\bozone\b", "O3"),
-        (r"\bco\b", "CO"),
-    )
-    for pattern, canonical in pollutant_patterns:
-        if re.search(pattern, text) and canonical not in pollutants:
-            pollutants.append(canonical)
+    pollutants = _pollutants_from_text(text) or []
     asks_aqi = bool(re.search(r"\baqi\b|air quality index", text))
     if asks_aqi:
         pollutants = ["PM25", "PM10", "NO2", "SO2", "CO", "O3"]
@@ -430,6 +430,33 @@ def rule_based_plan(question: str) -> QuerySpec:
     if operation == "rank":
         payload["group_by"] = "city"
     return QuerySpec.model_validate(payload)
+
+
+POLLUTANT_PATTERNS = (
+    (r"pm\s*2(?:\.|\s*)5|\bpm25\b|pm₂\.₅", "PM25"),
+    (r"\bpm\s*10\b|pm₁₀", "PM10"),
+    (r"\bno\s*2\b|no₂", "NO2"),
+    (r"\bso\s*2\b|so₂", "SO2"),
+    (r"\bo\s*3\b|o₃|\bozone\b", "O3"),
+    (r"\bco\b", "CO"),
+)
+
+
+def _pollutants_from_text(text: str) -> list[str] | None:
+    """Deterministically detect explicit pollutant mentions in a question.
+
+    Returns None for an AQI question (which implies all six pollutants
+    regardless of any single mention) or when nothing matched, so callers
+    only override a model's pollutant choice when the text gives clear,
+    specific evidence -- not when the question is silent on the point.
+    """
+    if re.search(r"\baqi\b|air quality index", text):
+        return None
+    pollutants = []
+    for pattern, canonical in POLLUTANT_PATTERNS:
+        if re.search(pattern, text) and canonical not in pollutants:
+            pollutants.append(canonical)
+    return pollutants or None
 
 
 def _expected_dataset_from_text(text: str) -> str | None:
