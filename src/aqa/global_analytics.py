@@ -63,7 +63,12 @@ class GlobalAnalytics:
             value_status="observed" if observed_only else "any",
             minimum_coverage=_percentage_constraint(text),
             minimum_stations=_station_constraint(text),
-            require_all_months=not flexible_cohort,
+            # A single named country should clip to whatever is available, the
+            # same as a city-level query, rather than fail outright just because
+            # the most recent (still-partial) month isn't fully in yet; only a
+            # genuine multi-country comparison needs every month present so the
+            # countries are compared over an identical period.
+            require_all_months=not flexible_cohort and len(selected) > 1,
         )
         exclusions = [item for item in cohort if not item.included]
         exclusion_counts = dict(Counter(item.reason_code for item in exclusions if item.reason_code))
@@ -269,11 +274,15 @@ def _period(
 
 
 def _resolution(text: str) -> str:
+    # Bare "year"/"month" also appear inside relative-period phrases ("last
+    # year", "this month", "year to date") that specify a time range, not a
+    # bucketing resolution; match the same specific phrasing the city-level
+    # rule-based planner uses so those aren't misread as "yearly"/"monthly".
     if "hour" in text or "time of day" in text:
         return "hourly"
-    if "year" in text or "annual" in text:
+    if any(term in text for term in ("annual", "yearly", "by year", "across years", "over years")):
         return "yearly"
-    if "month" in text:
+    if "monthly" in text or "month by month" in text or "by month" in text:
         return "monthly"
     return "daily"
 
