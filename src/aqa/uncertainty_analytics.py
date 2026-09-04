@@ -7,6 +7,7 @@ from typing import Any
 
 import duckdb
 import numpy as np
+import pandas as pd
 
 from .capabilities import CapabilityAssessment, PRIMARY_DATASETS
 from .config import load_config
@@ -27,8 +28,17 @@ def is_aggregation_comparison_question(question: str) -> bool:
     ) or ("aggregation schemes" in text and "equal-country" in text)
 
 
+def is_matched_month_city_balanced_bootstrap_question(question: str) -> bool:
+    text = question.casefold()
+    return (
+        re.search(r"matched months?", text) is not None
+        and "city-balanced" in text
+        and any(term in text for term in ("uncertainty interval", "confidence interval", "bootstrap"))
+    )
+
+
 class UncertaintyAnalytics:
-    """Seeded station bootstrap and explicit aggregation-weight sensitivity."""
+    """Seeded station bootstrap, city-balanced matched-month bootstrap, and explicit aggregation-weight sensitivity."""
 
     def __init__(self, config: dict | None = None):
         self.config = config or load_config()
@@ -37,11 +47,17 @@ class UncertaintyAnalytics:
 
     @staticmethod
     def should_handle(question: str, assessment: CapabilityAssessment) -> bool:
-        return is_sampling_uncertainty_question(question) or is_aggregation_comparison_question(question)
+        return (
+            is_sampling_uncertainty_question(question)
+            or is_aggregation_comparison_question(question)
+            or is_matched_month_city_balanced_bootstrap_question(question)
+        )
 
     def execute(self, question: str, assessment: CapabilityAssessment) -> dict[str, Any]:
         started = time.perf_counter()
         text = question.casefold()
+        if is_matched_month_city_balanced_bootstrap_question(question):
+            return self._matched_month_city_balanced_bootstrap(question, assessment, started)
         pollutant = next((name for pattern, name in POLLUTANTS if re.search(pattern, text)), "PM25")
         selected = list(self.catalog.selected(assessment.supported_datasets))
         if "seven primary" in text or "primary countries" in text or not selected:
@@ -67,6 +83,125 @@ class UncertaintyAnalytics:
         return self._aggregation_result(
             frame, pollutant, start, end, minimum_coverage, exclusions, started,
         )
+
+    def _matched_month_city_balanced_bootstrap(self, question: str, assessment: CapabilityAssessment,
+                                                started: float) -> dict[str, Any]:
+        text = question.casefold()
+        pollutant = next((name for pattern, name in POLLUTANTS if re.search(pattern, text)), "PM25")
+        selected = list(self.catalog.selected(assessment.supported_datasets))
+        if len(selected) < 2:
+            raise DataUnavailableError(
+                "A matched-month city-balanced comparison needs at least two explicitly named countries"
+            )
+        start, end = _period(text, self.catalog, [item.dataset for item in selected])
+        paths = self._paths(selected, start, end)
+        if not paths:
+            raise DataUnavailableError("No hourly rows overlap the requested uncertainty period")
+        coverage_threshold = float(self.config["analytics"].get("cohort_monthly_coverage_threshold", .8))
+        frame = self._city_month_values(paths, pollutant, start, end)
+        if frame.empty:
+            raise DataUnavailableError(
+                "No city-month observed-only series is available for the requested countries and period"
+            )
+        qualifying = frame[frame["coverage"] >= coverage_threshold].copy()
+        qualifying["month_period"] = pd.to_datetime(qualifying["month_start"]).dt.to_period("M")
+        datasets = [item.dataset for item in selected]
+        per_dataset_months = {
+            dataset: set(group["month_period"])
+            for dataset, group in qualifying.groupby("dataset")
+        }
+        missing = [dataset for dataset in datasets if not per_dataset_months.get(dataset)]
+        if missing:
+            names = [item.country_name for item in selected if item.dataset in missing]
+            raise DataUnavailableError(
+                f"No city meets the {coverage_threshold:.0%} monthly coverage criterion for: " + ", ".join(names)
+            )
+        matched_months = set.intersection(*(per_dataset_months[dataset] for dataset in datasets))
+        if not matched_months:
+            raise DataUnavailableError(
+                f"No calendar month meets the {coverage_threshold:.0%} monthly coverage criterion for every named country"
+            )
+        qualifying = qualifying[qualifying["month_period"].isin(matched_months)]
+
+        seed = int(self.config["analytics"].get("bootstrap_seed", 20260901))
+        replicates = int(self.config["analytics"].get("bootstrap_replicates", 1000))
+        rng = np.random.default_rng(seed)
+        rows = []
+        for dataset in datasets:
+            group = qualifying[qualifying["dataset"] == dataset]
+            if group.empty:
+                continue
+            city_values = group.groupby("city_id")["city_mean"].mean().to_numpy(dtype=float)
+            city_count = len(city_values)
+            indices = rng.integers(0, city_count, size=(replicates, city_count))
+            samples = city_values[indices].mean(axis=1)
+            rows.append({
+                "dataset": dataset, "country": group["country"].iloc[0], "pollutant": pollutant,
+                "mean": float(city_values.mean()), "bootstrap_standard_error": float(samples.std(ddof=1)),
+                "ci_lower": float(np.quantile(samples, .025)), "ci_upper": float(np.quantile(samples, .975)),
+                "confidence_level": .95, "city_count": int(city_count),
+                "matched_month_count": len(matched_months), "unit": group["unit"].iloc[0],
+            })
+        if not rows:
+            raise DataUnavailableError("No country has a qualifying city under the requested coverage criterion")
+        rows.sort(key=lambda row: row["mean"], reverse=True)
+        for rank, row in enumerate(rows, 1):
+            row["rank"] = rank
+        months_label = ", ".join(str(month) for month in sorted(matched_months))
+        answer = (
+            f"I restricted the comparison to the {len(matched_months)} calendar month(s) where every named country has at "
+            f"least one city meeting the {coverage_threshold:.0%} monthly coverage criterion ({months_label}), using "
+            "observed-only values. For each country I averaged its qualifying cities equally (city-balanced), then "
+            f"estimated uncertainty by resampling cities with replacement across {replicates:,} deterministic bootstrap "
+            "replicates."
+        )
+        return self._result(
+            rows=rows, operation="matched_month_city_balanced_bootstrap",
+            operator="matched_month_city_balanced_bootstrap_v1", answer=answer, pollutant=pollutant,
+            start=start, end=end, coverage=coverage_threshold, exclusions=[], started=started, visualization="bar",
+            analysis={"bootstrap_seed": seed, "bootstrap_replicates": replicates, "confidence_level": .95,
+                      "resampling_unit": "city", "matched_months": [str(month) for month in sorted(matched_months)],
+                      "value_status": "observed_only"},
+        )
+
+    def _city_month_values(self, paths: list[str], pollutant: str, start: datetime, end: datetime):
+        control = duckdb.connect(str(self.catalog.control_path), read_only=True)
+        try:
+            dimensions = control.execute(
+                "SELECT dataset,source_station_id,city FROM station_dimension"
+            ).fetchdf()
+        finally:
+            control.close()
+        connection = duckdb.connect()
+        connection.execute("SET threads=8")
+        connection.register("uncertainty_station_dimension", dimensions)
+        try:
+            return connection.execute("""
+                WITH station_month AS (
+                  SELECT dataset,any_value(country_name) country,source_station_id,
+                         date_trunc('month',timestamp_local) month_start,
+                         avg(observed_value) FILTER(WHERE value_status='observed' AND observed_value>=0) station_mean,
+                         count(*) expected_hour_count,
+                         count(*) FILTER(WHERE value_status='observed' AND observed_value>=0) observed_hour_count,
+                         any_value(unit) unit
+                  FROM read_parquet(?,hive_partitioning=true,union_by_name=true)
+                  WHERE pollutant=? AND timestamp_local BETWEEN ? AND ?
+                  GROUP BY dataset,source_station_id,month_start
+                ), enriched AS (
+                  SELECT s.*,d.city,lower(trim(d.city)) city_id
+                  FROM station_month s LEFT JOIN uncertainty_station_dimension d USING(dataset,source_station_id)
+                  WHERE d.city IS NOT NULL AND trim(d.city)<>''
+                )
+                SELECT dataset,any_value(country) country,city_id,any_value(city) city_name,month_start,
+                       avg(station_mean) city_mean,
+                       sum(observed_hour_count)::DOUBLE/nullif(sum(expected_hour_count),0) coverage,
+                       any_value(unit) unit
+                FROM enriched WHERE station_mean IS NOT NULL
+                GROUP BY dataset,city_id,month_start
+                ORDER BY dataset,city_name,month_start
+            """, [paths, pollutant, start, end]).fetchdf()
+        finally:
+            connection.close()
 
     def _station_values(self, paths: list[str], pollutant: str, start: datetime,
                         end: datetime, minimum_coverage: float):
