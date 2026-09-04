@@ -193,8 +193,6 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
             if method == "weekday/diurnal cohort comparison" and _weekday_weekend_supported(text):
                 continue
             assessment.unsupported_methods.append(method)
-    if "observed-only" in text and any(city in text for city in ("delhi", "beijing", "london", "mexico city", "bengaluru", "chennai", "seoul")):
-        assessment.unsupported_methods.append("city-level observed/imputed provenance analytics")
     flexible_country_cohort = (
         is_flexible_country_cohort(question, assessment.intent)
         or _forecast_portfolio_supported(text) or _advanced_visualization_supported(text)
