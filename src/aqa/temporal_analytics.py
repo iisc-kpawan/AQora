@@ -30,10 +30,12 @@ class TemporalAnalytics:
     @staticmethod
     def should_handle(question: str, assessment: CapabilityAssessment) -> bool:
         text = question.casefold()
-        return assessment.intent == "temporal" or any(term in text for term in (
-            "moving average", "day-of-week", "day of week", "hour-of-day", "hour of day", "increase or decrease",
-            "month-over-month", "trend slope", "highest mean", "weekday", "weekend", "daytime", "nighttime",
-        ))
+        return assessment.intent == "temporal" or bool(re.search(r"change[- ]?point", text)) or any(
+            term in text for term in (
+                "moving average", "day-of-week", "day of week", "hour-of-day", "hour of day", "increase or decrease",
+                "month-over-month", "trend slope", "highest mean", "weekday", "weekend", "daytime", "nighttime",
+            )
+        )
 
     def execute(self, question: str, assessment: CapabilityAssessment) -> dict[str, Any]:
         started = time.perf_counter()
@@ -79,6 +81,10 @@ class TemporalAnalytics:
             elif operation == "weekday_weekend": rows = _weekday_weekend(rows)
             elif operation == "moving_average": rows = _moving_average(rows, _window(text))
             visualization = "line"
+        elif operation == "changepoint":
+            minimum_segment_days = int(self.config.get("analytics", {}).get("changepoint_minimum_segment_days", 30))
+            rows = _changepoints(self._daily(selected, cities, pollutant, start, end), minimum_segment_days)
+            visualization = "line"
         else:
             rows = self._monthly(selected, cities, pollutant, start, end)
             if operation == "slope": rows = _slopes(rows)
@@ -109,8 +115,9 @@ class TemporalAnalytics:
                 "dataset": "GLOBAL_TEMPORAL" if len(candidates) > 1 else candidates[0].dataset,
                 "operation": operation, "geography_level": geography, "locations": cities or [item.country_name for item in candidates],
                 "pollutants": [pollutant], "time_range": {"start": start.isoformat(), "end": end.isoformat()},
-                "resolution": "hourly" if operation in {"hour_of_day", "joint_weekday_diurnal", "day_night"} else "daily" if operation in {"day_of_week", "weekday_weekend", "moving_average", "daily_series"} else "monthly",
-                "metrics": ["mean"], "filters": {},
+                "resolution": "hourly" if operation in {"hour_of_day", "joint_weekday_diurnal", "day_night"} else "daily" if operation in {"day_of_week", "weekday_weekend", "moving_average", "daily_series", "changepoint"} else "monthly",
+                "metrics": ["before_mean", "after_mean", "mean_shift"] if operation == "changepoint" else ["mean"],
+                "filters": {},
             },
             "resolved_period": {"start": start.isoformat(), "end": end.isoformat(),
                                 "basis": "latest common observed month with UTC-hour intersection" if operation == "joint_weekday_diurnal" and not _has_period(text) else "explicit period"},
@@ -123,7 +130,9 @@ class TemporalAnalytics:
             },
             "visualization": {"type": visualization},
             "analysis": {"operator": "area_temporal_v1", "method": operation, "exclusions": exclusion_rows,
-                         "joint_timestamp_basis": "UTC hour floor" if operation == "joint_weekday_diurnal" else None},
+                         "joint_timestamp_basis": "UTC hour floor" if operation == "joint_weekday_diurnal" else None,
+                         **({"change_point_method": "minimum two-segment squared error",
+                             "minimum_segment_days": rows[0]["minimum_segment_days"]} if operation == "changepoint" else {})},
             "answer": answer, "display_title": f"{pollutant} · temporal analysis",
             "model_trace": {"provider": "deterministic", "model": "area_temporal_v1", "latency_ms": 0,
                             "prompt_tokens": None, "completion_tokens": None, "fallback_used": False},
@@ -323,6 +332,7 @@ def _operation(text: str) -> str:
     if "weekday" in text and "weekend" in text: return "weekday_weekend"
     if "hour-of-day" in text or "hour of day" in text or "diurnal" in text: return "hour_of_day"
     if "day-of-week" in text or "day of week" in text: return "day_of_week"
+    if re.search(r"change[- ]?point", text): return "changepoint"
     if "moving average" in text: return "moving_average"
     if "month-over-month" in text or "percentage change" in text: return "percent_change"
     if "increase or decrease" in text or re.search(r"\bfrom\s+\w+\s+to\s+\w+",text): return "two_period_change"
@@ -402,6 +412,59 @@ def _two_period_change(rows):
     return output
 
 
+def _changepoints(rows: list[dict], minimum_segment_days: int) -> list[dict]:
+    """Single strongest breakpoint per area via minimum two-segment squared error.
+
+    Uses prefix sums so the search over every candidate split is O(n) rather
+    than O(n^2); n is small (roughly a year of days) but there is no reason
+    to pay the quadratic cost.
+    """
+    grouped: dict[str, list[dict]] = {}
+    for row in rows:
+        grouped.setdefault(row["area_name"], []).append(row)
+    output = []
+    for area, values in grouped.items():
+        values.sort(key=lambda row: row["timestamp"])
+        series = np.asarray([row["mean"] for row in values], dtype=float)
+        n = len(series)
+        base = {
+            "dataset": values[0]["dataset"], "country": values[0]["country"], "area_name": area,
+            "day_count": n, "minimum_segment_days": minimum_segment_days,
+            "active_station_count": max((row.get("active_station_count") or 0) for row in values),
+            "unit": values[0]["unit"],
+        }
+        if n < 2 * minimum_segment_days:
+            output.append({
+                **base, "insufficient_days": True, "breakpoint_date": None,
+                "before_period_start": None, "before_period_end": None,
+                "after_period_start": None, "after_period_end": None,
+                "before_day_count": None, "after_day_count": None,
+                "before_mean": None, "after_mean": None, "mean_shift": None,
+            })
+            continue
+        prefix_sum = np.concatenate([[0.0], np.cumsum(series)])
+        prefix_sq = np.concatenate([[0.0], np.cumsum(series ** 2)])
+        total_sum, total_sq = prefix_sum[-1], prefix_sq[-1]
+        best = None
+        for split in range(minimum_segment_days, n - minimum_segment_days + 1):
+            before_sum, before_sq = prefix_sum[split], prefix_sq[split]
+            after_sum, after_sq = total_sum - before_sum, total_sq - before_sq
+            before_n, after_n = split, n - split
+            loss = (before_sq - before_sum ** 2 / before_n) + (after_sq - after_sum ** 2 / after_n)
+            if best is None or loss < best[0]:
+                best = (loss, split, before_sum / before_n, after_sum / after_n)
+        _, split, before_mean, after_mean = best
+        output.append({
+            **base, "insufficient_days": False, "breakpoint_date": values[split]["timestamp"],
+            "before_period_start": values[0]["timestamp"], "before_period_end": values[split - 1]["timestamp"],
+            "after_period_start": values[split]["timestamp"], "after_period_end": values[-1]["timestamp"],
+            "before_day_count": split, "after_day_count": n - split,
+            "before_mean": float(before_mean), "after_mean": float(after_mean),
+            "mean_shift": float(after_mean - before_mean),
+        })
+    return output
+
+
 def _highest_months(rows,n):
     grouped={}
     for row in rows: grouped.setdefault(row["area_name"],[]).append(row)
@@ -418,6 +481,22 @@ def _answer(rows,operation,pollutant,start,end):
         return f"For {period}, the equal-station monthly {pollutant} trends are {values}."
     if operation=="two_period_change":
         row=rows[0]; return f"{row['area_name']} {pollutant} {row['direction']} from {row['start_mean']:.2f} to {row['end_mean']:.2f} {row['unit']} ({row['percentage_change']:.1%}) between the first and last requested months."
+    if operation=="changepoint":
+        parts=[]
+        for row in rows:
+            if row.get("insufficient_days"):
+                parts.append(f"{row['area_name']} has only {row['day_count']} valid days, fewer than the {row['minimum_segment_days']} required on each side of a candidate breakpoint, so no changepoint could be estimated.")
+                continue
+            parts.append(
+                f"{row['area_name']}'s largest daily mean shift is on {row['breakpoint_date'][:10]}: "
+                f"{row['before_mean']:.2f} {row['unit']} over the preceding {row['before_day_count']} days versus "
+                f"{row['after_mean']:.2f} {row['unit']} over the following {row['after_day_count']} days "
+                f"({row['mean_shift']:+.2f} {row['unit']})."
+            )
+        return (
+            f"For {period}, I searched for the single daily-mean breakpoint that minimizes combined before/after "
+            f"squared error, requiring at least {rows[0]['minimum_segment_days']} days on each side. " + " ".join(parts)
+        )
     labels={"hour_of_day":"hour-of-day profile","joint_weekday_diurnal":"jointly observed weekday diurnal profile","day_night":"daytime/nighttime comparison","day_of_week":"day-of-week profile","weekday_weekend":"weekday/weekend comparison","moving_average":"moving-average series","percent_change":"month-over-month changes","highest_months":"highest-month ranking","daily_series":"daily series","monthly_series":"monthly series"}
     return f"I calculated {len(rows)} {pollutant} {labels.get(operation,operation)} results for {period} using equal-station area values."
 
