@@ -11,15 +11,26 @@ def test_last_month_is_the_complete_previous_calendar_month():
     assert end == datetime(2026, 8, 31, 23, 59, 59)
 
 
-def test_bare_last_year_and_last_week_resolve_against_real_now():
+def test_bare_last_week_resolves_against_real_now():
+    now = datetime(2026, 9, 5, 17, 30)
+    unused_available_end = datetime(2020, 1, 1)
+    start, end = resolve_period("last week", unused_available_end, now)
+    assert end == now
+    assert (end - start).total_seconds() == 167 * 3600
+
+
+def test_year_phrases_stay_within_whole_calendar_years_and_never_cross_into_the_current_year():
     now = datetime(2026, 9, 5, 17, 30)
     unused_available_end = datetime(2020, 1, 1)
     start, end = resolve_period("last year", unused_available_end, now)
     assert start == datetime(2025, 1, 1)
-    assert end == now
-    start, end = resolve_period("last week", unused_available_end, now)
-    assert end == now
-    assert (end - start).total_seconds() == 167 * 3600
+    assert end == datetime(2025, 12, 31, 23, 59, 59)
+    start, end = resolve_period("last 3 years", unused_available_end, now)
+    assert start == datetime(2023, 1, 1)
+    assert end == datetime(2025, 12, 31, 23, 59, 59)
+    start, end = resolve_period("past 5 years", unused_available_end, now)
+    assert start == datetime(2021, 1, 1)
+    assert end == datetime(2025, 12, 31, 23, 59, 59)
 
 
 def test_today_yesterday_and_this_week_resolve_against_the_real_current_time():
