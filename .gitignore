@@ -54,6 +54,7 @@ tests/**
 !tests/test_aqi.py
 !tests/test_compound_analytics.py
 !tests/test_burden_episode_analytics.py
+!tests/test_global_analytics.py
 !tests/test_forecasting.py
 !tests/test_periods.py
 !tests/test_queryspec.py

@@ -282,6 +282,10 @@ def _percentage_constraint(text: str) -> float | None:
 
 def _station_constraint(text: str) -> int | None:
     match = re.search(r"(?:at least|>=|minimum)\s*(\d+)\s*(?:active\s+)?(?:pm2\.5\s+)?stations", text)
+    if match:
+        return int(match.group(1))
+    # "at least 80% coverage and 10 active stations" elides the second "at least".
+    match = re.search(r"\band\s+(\d+)\s+active\s+(?:pm2\.5\s+)?stations", text)
     return int(match.group(1)) if match else None
 
 
