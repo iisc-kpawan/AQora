@@ -67,7 +67,13 @@ def resolve_period(period: str, available_end: datetime, now: datetime | None = 
             for _ in range(count - 1):
                 start = (start.replace(day=1) - timedelta(days=1)).replace(day=1)
             return start.replace(hour=0, minute=0, second=0, microsecond=0), end
-        return now.replace(year=now.year - count, month=1, day=1, hour=0, minute=0, second=0, microsecond=0), now
+        # Unlike "last N months" (which rolls forward to `now` unless the
+        # question says "complete"), a year phrase always means whole
+        # calendar year(s) immediately before the current one -- it never
+        # crosses into the current, still-partial year.
+        end = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0) - timedelta(seconds=1)
+        start = now.replace(year=now.year - count, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        return start, end
     for fmt in ("%Y-%m", "%Y"):
         try:
             start = datetime.strptime(text, fmt)
