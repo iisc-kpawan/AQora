@@ -196,7 +196,9 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
                 continue
             if method == "aggregation-method comparison" and _aggregation_comparison_supported(text):
                 continue
-            if method == "weekday/diurnal cohort comparison" and _weekday_weekend_supported(text):
+            if method == "weekday/diurnal cohort comparison" and (
+                _weekday_weekend_supported(text) or _hour_by_weekday_supported(text)
+            ):
                 continue
             assessment.unsupported_methods.append(method)
     flexible_country_cohort = (
@@ -274,6 +276,10 @@ def _weekday_weekend_supported(text: str) -> bool:
         and "jointly observed" not in text
         and "hour-of-day by day-of-week" not in text
     )
+
+
+def _hour_by_weekday_supported(text: str) -> bool:
+    return bool(re.search(r"hour-of-day\s+by\s+day-of-week|hour\s+of\s+day\s+by\s+day\s+of\s+week", text))
 
 
 def _forecast_portfolio_supported(text: str) -> bool:
