@@ -34,7 +34,7 @@ from .derived_temporal_analytics import DerivedTemporalAnalytics
 from .advanced_aqi_analytics import AdvancedAQIAnalytics
 from .compound_analytics import CompoundAnalytics
 from .burden_episode_analytics import BurdenEpisodeAnalytics
-from .queryspec import QuerySpec, TimeRange
+from .queryspec import Dataset, QuerySpec, TimeRange
 
 
 SYSTEM_PROMPT = """You plan air-quality analytics. Return only a JSON object valid for the supplied QuerySpec schema. Never calculate measurements, emit SQL, use file paths, or invent entities. Relative periods must remain phrases so deterministic code resolves them against data availability."""
@@ -135,8 +135,33 @@ class ConversationalAgent:
         self.compound_analytics = CompoundAnalytics(self.config)
         self.burden_episode_analytics = BurdenEpisodeAnalytics(self.config)
 
-    def ask(self, question: str, *, provider: str | None = None, model: str | None = None) -> dict[str, Any]:
+    def ask(
+        self, question: str, *, provider: str | None = None, model: str | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         assessment = assess_question(question, self.config)
+        inherited_location_note = None
+        if assessment.location_ambiguous:
+            candidate_locations = (context or {}).get("locations") or []
+            if len(candidate_locations) == 1:
+                inherited_location = candidate_locations[0]
+                augmented_question = f"For {inherited_location}: {question}"
+                reassessed = assess_question(augmented_question, self.config)
+                if not reassessed.location_ambiguous:
+                    question, assessment = augmented_question, reassessed
+                    inherited_location_note = (
+                        f"(Continuing about {inherited_location} from your previous question, "
+                        "since this one didn't name a location.) "
+                    )
+        result = self._ask_dispatch(question, assessment, provider=provider, model=model)
+        if inherited_location_note and result.get("kind") != "limitation":
+            result["answer"] = inherited_location_note + result["answer"]
+        return result
+
+    def _ask_dispatch(
+        self, question: str, assessment: CapabilityAssessment, *,
+        provider: str | None = None, model: str | None = None,
+    ) -> dict[str, Any]:
         metadata_period_audit = (
             assessment.intent == "metadata" and assessment.unavailable_periods
             and not assessment.unsupported_places and not assessment.unsupported_methods
@@ -259,15 +284,36 @@ class ConversationalAgent:
             if guarded != spec:
                 spec = guarded
                 trace = ModelTrace("deterministic_guardrail", "rule_planner_v2", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
-        confident_period = _confident_relative_period(text)
-        if confident_period:
-            # A model can hallucinate absolute dates for a relative phrase, or pick the
-            # wrong phrase entirely (e.g. "last month" for a "last year" question); the
-            # phrase actually present in the question always wins over the model's guess.
-            deterministic_range = TimeRange.model_validate({"period": confident_period})
+        confident_time_range = _confident_time_range_from_question(text)
+        if confident_time_range:
+            # A model can hallucinate dates for a relative phrase, pick the wrong
+            # phrase entirely (e.g. "last month" for a "last year" question), or
+            # simply misread an explicit date the question names outright (e.g.
+            # "March 2026"); whatever the question's own wording deterministically
+            # implies always wins over the model's guess.
+            deterministic_range = TimeRange.model_validate(confident_time_range)
             if deterministic_range != spec.time_range:
                 spec = spec.model_copy(update={"time_range": deterministic_range})
-                trace = ModelTrace("deterministic_guardrail", "relative_period_guardrail_v1", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
+                trace = ModelTrace("deterministic_guardrail", "time_range_guardrail_v1", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
+        expected_dataset = _expected_dataset_from_text(text)
+        if expected_dataset and spec.dataset.value != expected_dataset:
+            # A model can name the right city but still pick the wrong dataset
+            # enum (e.g. CPCB for a Beijing question), which then fails to
+            # resolve the city at all; the country actually named in the
+            # question always wins over the model's own dataset choice.
+            spec = spec.model_copy(update={"dataset": Dataset(expected_dataset)})
+            trace = ModelTrace("deterministic_guardrail", "dataset_country_guardrail_v1", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
+        expected_pollutants = _pollutants_from_text(text)
+        if expected_pollutants and spec.pollutants != expected_pollutants:
+            # A model can garble a pollutant mention entirely (e.g. "ozone
+            # levels" planned as the literal pollutant "ozone_levels", which
+            # fails to resolve at all), pick a different one than the question
+            # named, or just leave it in a non-canonical form (e.g. "OZONE"
+            # instead of "O3") that computes correctly but displays inconsistently;
+            # the pollutant(s) actually named in the question always win, in
+            # their canonical form, over the model's own output.
+            spec = spec.model_copy(update={"pollutants": expected_pollutants})
+            trace = ModelTrace("deterministic_guardrail", "pollutant_guardrail_v1", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
         try:
             result = self.analytics.execute(spec)
         except AQAError as exc:
@@ -286,6 +332,12 @@ def limitation_result(
     extra_reason: str | None = None,
 ) -> dict[str, Any]:
     reasons = []
+    if assessment.location_ambiguous:
+        reasons.append(
+            "No country or city was named in the question, so I can't determine which dataset to use. "
+            "This system does not carry context between questions -- please name a location explicitly "
+            "(e.g. \"Delhi\", \"China\", \"United Kingdom\") in every question that needs one."
+        )
     if assessment.unsupported_places:
         reasons.append("The requested geography is not loaded: " + ", ".join(assessment.unsupported_places) + ".")
     if assessment.unavailable_periods:
@@ -336,18 +388,7 @@ def rule_based_plan(question: str) -> QuerySpec:
         locations, level = matched, "city"
     if level == "country":
         locations = ["India", "China"] if dataset == "ALL" else ["China" if dataset == "CNEMC" else "India"]
-    pollutants = []
-    pollutant_patterns = (
-        (r"pm\s*2(?:\.|\s*)5|\bpm25\b|pm₂\.₅", "PM25"),
-        (r"\bpm\s*10\b|pm₁₀", "PM10"),
-        (r"\bno\s*2\b|no₂", "NO2"),
-        (r"\bso\s*2\b|so₂", "SO2"),
-        (r"\bo\s*3\b|o₃|\bozone\b", "O3"),
-        (r"\bco\b", "CO"),
-    )
-    for pattern, canonical in pollutant_patterns:
-        if re.search(pattern, text) and canonical not in pollutants:
-            pollutants.append(canonical)
+    pollutants = _pollutants_from_text(text) or []
     asks_aqi = bool(re.search(r"\baqi\b|air quality index", text))
     if asks_aqi:
         pollutants = ["PM25", "PM10", "NO2", "SO2", "CO", "O3"]
@@ -391,6 +432,44 @@ def rule_based_plan(question: str) -> QuerySpec:
     return QuerySpec.model_validate(payload)
 
 
+POLLUTANT_PATTERNS = (
+    (r"pm\s*2(?:\.|\s*)5|\bpm25\b|pm₂\.₅", "PM25"),
+    (r"\bpm\s*10\b|pm₁₀", "PM10"),
+    (r"\bno\s*2\b|no₂", "NO2"),
+    (r"\bso\s*2\b|so₂", "SO2"),
+    (r"\bo\s*3\b|o₃|\bozone\b", "O3"),
+    (r"\bco\b", "CO"),
+)
+
+
+def _pollutants_from_text(text: str) -> list[str] | None:
+    """Deterministically detect explicit pollutant mentions in a question.
+
+    Returns None for an AQI question (which implies all six pollutants
+    regardless of any single mention) or when nothing matched, so callers
+    only override a model's pollutant choice when the text gives clear,
+    specific evidence -- not when the question is silent on the point.
+    """
+    if re.search(r"\baqi\b|air quality index", text):
+        return None
+    pollutants = []
+    for pattern, canonical in POLLUTANT_PATTERNS:
+        if re.search(pattern, text) and canonical not in pollutants:
+            pollutants.append(canonical)
+    return pollutants or None
+
+
+def _expected_dataset_from_text(text: str) -> str | None:
+    """Deterministically infer which Dataset enum a question's own wording implies.
+
+    Returns None when the text names neither country, so callers only override
+    a model's dataset choice when the question itself gives clear evidence.
+    """
+    has_china = any(word in text for word in ("china", "beijing", "shanghai", "guangzhou", "shenzhen", "chinese"))
+    has_india = any(word in text for word in ("india", "delhi", "mumbai", "bengaluru", "bangalore", "chennai", "kolkata", "indian"))
+    return "ALL" if has_china and has_india else "CNEMC" if has_china else "CPCB" if has_india else None
+
+
 def _confident_relative_period(text: str) -> str | None:
     """Extract a period phrase for canonical relative/current-period wording.
 
@@ -420,7 +499,12 @@ def _confident_relative_period(text: str) -> str | None:
     return None
 
 
-def _time_range_from_question(text: str) -> dict[str, str]:
+def _confident_time_range_from_question(text: str) -> dict[str, str] | None:
+    """Like _confident_relative_period, but also covers explicit dates the
+    question names outright (a day, a month, a year, or a range of these).
+    Returns None when the question gives no textual time evidence at all, so
+    callers don't force a period onto a question that never mentioned one.
+    """
     confident = _confident_relative_period(text)
     if confident:
         return {"period": confident}
@@ -446,7 +530,19 @@ def _time_range_from_question(text: str) -> dict[str, str]:
         return {"start": datetime(years[0], 1, 1).isoformat(), "end": datetime(years[-1], 12, 31, 23, 59, 59).isoformat()}
     if years:
         return {"period": str(years[0])}
-    return {"period": "last month"}
+    return None
+
+
+def _time_range_from_question(text: str) -> dict[str, str]:
+    return _confident_time_range_from_question(text) or {"period": "last month"}
+
+
+METRIC_LABELS = {
+    "mean": "average", "median": "median", "max": "maximum", "min": "minimum",
+    "std": "standard deviation", "variance": "variance", "p05": "5th percentile",
+    "p25": "25th percentile", "p75": "75th percentile", "p95": "95th percentile",
+    "count": "count", "coverage": "coverage",
+}
 
 
 def explain_result(question: str, result: dict) -> str:
@@ -485,9 +581,14 @@ def explain_result(question: str, result: dict) -> str:
         summary = f"The {metric} {row.get('pollutant', spec['pollutants'][0])} value for {row.get('location', spec['locations'][0])} was {row[metric]:.2f} {unit} between {start} and {end}."
     elif metric:
         valid = [row for row in data if row.get(metric) is not None]
+        values = [row[metric] for row in valid]
+        overall = sum(values) / len(values)
         highest, lowest = max(valid, key=lambda row: row[metric]), min(valid, key=lambda row: row[metric])
-        summary = (f"From {start} to {end}, {spec['pollutants'][0]} ranged from {lowest[metric]:.2f} {unit} on {_date_label(lowest['timestamp'])} "
-                   f"to {highest[metric]:.2f} {unit} on {_date_label(highest['timestamp'])}. The result contains {len(valid)} {spec['resolution']} periods from {meta['station_count']} stations.")
+        metric_label = METRIC_LABELS.get(metric, metric)
+        summary = (f"From {start} to {end}, the {metric_label} {spec['pollutants'][0]} was {overall:.2f} {unit} "
+                   f"(daily values ranged from {lowest[metric]:.2f} {unit} on {_date_label(lowest['timestamp'])} "
+                   f"to {highest[metric]:.2f} {unit} on {_date_label(highest['timestamp'])}). "
+                   f"The result contains {len(valid)} {spec['resolution']} periods from {meta['station_count']} stations.")
     else:
         summary = f"The query returned {len(data)} results covering {start} to {end}."
     if meta.get("station_balanced") and meta.get("station_count", 0) > 1:

@@ -1,4 +1,27 @@
-from aqa.agent import rule_based_plan
+from aqa.agent import _expected_dataset_from_text, _pollutants_from_text, rule_based_plan
+
+
+def test_pollutants_from_text_recognizes_ozone_synonym():
+    # _pollutants_from_text expects already-casefolded text, matching how
+    # every caller (rule_based_plan, the agent guardrail) invokes it.
+    assert _pollutants_from_text("ozone levels in delhi march 2026") == ["O3"]
+    assert _pollutants_from_text("average so2 in delhi") == ["SO2"]
+    assert _pollutants_from_text("compare pm2.5 and no2 in delhi") == ["PM25", "NO2"]
+
+
+def test_pollutants_from_text_ignores_aqi_questions():
+    assert _pollutants_from_text("what is the aqi in delhi") is None
+
+
+def test_pollutants_from_text_returns_none_when_nothing_matches():
+    assert _pollutants_from_text("data coverage in delhi") is None
+
+
+def test_expected_dataset_from_text_detects_country_from_city_names():
+    assert _expected_dataset_from_text("pm 10 of beijing last year") == "CNEMC"
+    assert _expected_dataset_from_text("average pm2.5 in delhi") == "CPCB"
+    assert _expected_dataset_from_text("compare delhi and beijing pm2.5") == "ALL"
+    assert _expected_dataset_from_text("average pm2.5 in london") is None
 
 
 def test_rule_planner_resolves_china_alias_and_pollutant():
