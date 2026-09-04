@@ -34,7 +34,7 @@ from .derived_temporal_analytics import DerivedTemporalAnalytics
 from .advanced_aqi_analytics import AdvancedAQIAnalytics
 from .compound_analytics import CompoundAnalytics
 from .burden_episode_analytics import BurdenEpisodeAnalytics
-from .queryspec import QuerySpec, TimeRange
+from .queryspec import Dataset, QuerySpec, TimeRange
 
 
 SYSTEM_PROMPT = """You plan air-quality analytics. Return only a JSON object valid for the supplied QuerySpec schema. Never calculate measurements, emit SQL, use file paths, or invent entities. Relative periods must remain phrases so deterministic code resolves them against data availability."""
@@ -293,6 +293,14 @@ class ConversationalAgent:
             if deterministic_range != spec.time_range:
                 spec = spec.model_copy(update={"time_range": deterministic_range})
                 trace = ModelTrace("deterministic_guardrail", "relative_period_guardrail_v1", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
+        expected_dataset = _expected_dataset_from_text(text)
+        if expected_dataset and spec.dataset.value != expected_dataset:
+            # A model can name the right city but still pick the wrong dataset
+            # enum (e.g. CPCB for a Beijing question), which then fails to
+            # resolve the city at all; the country actually named in the
+            # question always wins over the model's own dataset choice.
+            spec = spec.model_copy(update={"dataset": Dataset(expected_dataset)})
+            trace = ModelTrace("deterministic_guardrail", "dataset_country_guardrail_v1", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
         try:
             result = self.analytics.execute(spec)
         except AQAError as exc:
@@ -420,6 +428,17 @@ def rule_based_plan(question: str) -> QuerySpec:
     if operation == "rank":
         payload["group_by"] = "city"
     return QuerySpec.model_validate(payload)
+
+
+def _expected_dataset_from_text(text: str) -> str | None:
+    """Deterministically infer which Dataset enum a question's own wording implies.
+
+    Returns None when the text names neither country, so callers only override
+    a model's dataset choice when the question itself gives clear evidence.
+    """
+    has_china = any(word in text for word in ("china", "beijing", "shanghai", "guangzhou", "shenzhen", "chinese"))
+    has_india = any(word in text for word in ("india", "delhi", "mumbai", "bengaluru", "bangalore", "chennai", "kolkata", "indian"))
+    return "ALL" if has_china and has_india else "CNEMC" if has_china else "CPCB" if has_india else None
 
 
 def _confident_relative_period(text: str) -> str | None:

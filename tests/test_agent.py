@@ -1,4 +1,11 @@
-from aqa.agent import rule_based_plan
+from aqa.agent import _expected_dataset_from_text, rule_based_plan
+
+
+def test_expected_dataset_from_text_detects_country_from_city_names():
+    assert _expected_dataset_from_text("pm 10 of beijing last year") == "CNEMC"
+    assert _expected_dataset_from_text("average pm2.5 in delhi") == "CPCB"
+    assert _expected_dataset_from_text("compare delhi and beijing pm2.5") == "ALL"
+    assert _expected_dataset_from_text("average pm2.5 in london") is None
 
 
 def test_rule_planner_resolves_china_alias_and_pollutant():
