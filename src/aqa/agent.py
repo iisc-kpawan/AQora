@@ -34,7 +34,7 @@ from .derived_temporal_analytics import DerivedTemporalAnalytics
 from .advanced_aqi_analytics import AdvancedAQIAnalytics
 from .compound_analytics import CompoundAnalytics
 from .burden_episode_analytics import BurdenEpisodeAnalytics
-from .queryspec import QuerySpec
+from .queryspec import QuerySpec, TimeRange
 
 
 SYSTEM_PROMPT = """You plan air-quality analytics. Return only a JSON object valid for the supplied QuerySpec schema. Never calculate measurements, emit SQL, use file paths, or invent entities. Relative periods must remain phrases so deterministic code resolves them against data availability."""
@@ -259,6 +259,20 @@ class ConversationalAgent:
             if guarded != spec:
                 spec = guarded
                 trace = ModelTrace("deterministic_guardrail", "rule_planner_v2", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
+        relative_period_mentioned = re.search(
+            r"\blast\s+(?:\d+\s+)?(?:complete\s+)?(?:hours?|days?|weeks?|months?|years?)\b"
+            r"|\b(?:this|current)\s+month\b|\blatest\s+(?:month|available)\b"
+            r"|\bover\s+years\b|\bby\s+year\b|\bacross\s+years\b|\ball\s+years\b",
+            text,
+        )
+        if relative_period_mentioned:
+            # A model can hallucinate absolute dates for a relative phrase, or pick the
+            # wrong phrase entirely (e.g. "last month" for a "last year" question); the
+            # phrase actually present in the question always wins over the model's guess.
+            deterministic_range = TimeRange.model_validate(_time_range_from_question(text))
+            if deterministic_range != spec.time_range:
+                spec = spec.model_copy(update={"time_range": deterministic_range})
+                trace = ModelTrace("deterministic_guardrail", "relative_period_guardrail_v1", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
         try:
             result = self.analytics.execute(spec)
         except AQAError as exc:
@@ -383,9 +397,12 @@ def rule_based_plan(question: str) -> QuerySpec:
 
 
 def _time_range_from_question(text: str) -> dict[str, str]:
-    relative = re.search(r"last\s+\d+\s+(?:complete\s+)?(?:hours?|days?|weeks?|months?|years?)", text)
+    relative = re.search(r"\blast\s+(?:\d+\s+)?(?:complete\s+)?(?:hours?|days?|weeks?|months?|years?)\b", text)
     if relative:
         return {"period": relative.group(0)}
+    current = re.search(r"\b(?:this month|current month|latest available|latest month)\b", text)
+    if current:
+        return {"period": current.group(0)}
     if any(term in text for term in ("over years", "by year", "across years", "all years")):
         return {"period": "all available"}
     month_names = {name.casefold(): number for number, name in enumerate(calendar.month_name) if name}

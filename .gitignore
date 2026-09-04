@@ -16,6 +16,7 @@ configs/aqa.yaml
 configs/*.local.yaml
 *.pem
 *.key
+.claude/settings.local.json
 
 # Runtime data, databases, model artifacts, exports, and logs
 data/**
