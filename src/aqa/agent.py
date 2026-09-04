@@ -284,15 +284,17 @@ class ConversationalAgent:
             if guarded != spec:
                 spec = guarded
                 trace = ModelTrace("deterministic_guardrail", "rule_planner_v2", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
-        confident_period = _confident_relative_period(text)
-        if confident_period:
-            # A model can hallucinate absolute dates for a relative phrase, or pick the
-            # wrong phrase entirely (e.g. "last month" for a "last year" question); the
-            # phrase actually present in the question always wins over the model's guess.
-            deterministic_range = TimeRange.model_validate({"period": confident_period})
+        confident_time_range = _confident_time_range_from_question(text)
+        if confident_time_range:
+            # A model can hallucinate dates for a relative phrase, pick the wrong
+            # phrase entirely (e.g. "last month" for a "last year" question), or
+            # simply misread an explicit date the question names outright (e.g.
+            # "March 2026"); whatever the question's own wording deterministically
+            # implies always wins over the model's guess.
+            deterministic_range = TimeRange.model_validate(confident_time_range)
             if deterministic_range != spec.time_range:
                 spec = spec.model_copy(update={"time_range": deterministic_range})
-                trace = ModelTrace("deterministic_guardrail", "relative_period_guardrail_v1", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
+                trace = ModelTrace("deterministic_guardrail", "time_range_guardrail_v1", trace.latency_ms, trace.prompt_tokens, trace.completion_tokens, True)
         expected_dataset = _expected_dataset_from_text(text)
         if expected_dataset and spec.dataset.value != expected_dataset:
             # A model can name the right city but still pick the wrong dataset
@@ -470,7 +472,12 @@ def _confident_relative_period(text: str) -> str | None:
     return None
 
 
-def _time_range_from_question(text: str) -> dict[str, str]:
+def _confident_time_range_from_question(text: str) -> dict[str, str] | None:
+    """Like _confident_relative_period, but also covers explicit dates the
+    question names outright (a day, a month, a year, or a range of these).
+    Returns None when the question gives no textual time evidence at all, so
+    callers don't force a period onto a question that never mentioned one.
+    """
     confident = _confident_relative_period(text)
     if confident:
         return {"period": confident}
@@ -496,7 +503,11 @@ def _time_range_from_question(text: str) -> dict[str, str]:
         return {"start": datetime(years[0], 1, 1).isoformat(), "end": datetime(years[-1], 12, 31, 23, 59, 59).isoformat()}
     if years:
         return {"period": str(years[0])}
-    return {"period": "last month"}
+    return None
+
+
+def _time_range_from_question(text: str) -> dict[str, str]:
+    return _confident_time_range_from_question(text) or {"period": "last month"}
 
 
 def explain_result(question: str, result: dict) -> str:
