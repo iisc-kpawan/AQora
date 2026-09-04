@@ -16,6 +16,7 @@ configs/aqa.yaml
 configs/*.local.yaml
 *.pem
 *.key
+.claude/settings.local.json
 
 # Runtime data, databases, model artifacts, exports, and logs
 data/**
@@ -53,6 +54,7 @@ tests/**
 !tests/test_aqi.py
 !tests/test_compound_analytics.py
 !tests/test_burden_episode_analytics.py
+!tests/test_global_analytics.py
 !tests/test_forecasting.py
 !tests/test_periods.py
 !tests/test_queryspec.py
