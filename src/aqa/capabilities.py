@@ -71,7 +71,7 @@ class CapabilityAssessment:
 
 def classify_intent(question: str) -> str:
     text = question.casefold()
-    if "forecast" in text or "backtest" in text or "mase" in text or "rmse" in text:
+    if "forecast" in text or "backtest" in text or "mase" in text or "rmse" in text or "smape" in text:
         return "forecast"
     if any(term in text for term in (
         "source network", "source family", "station–pollutant", "station-pollutant",
@@ -231,9 +231,9 @@ def _forecast_portfolio_supported(text: str) -> bool:
     )
     rolling = (
         "rolling 24-hour" in text and "eligible cities" in text
-        and "seasonal naive" in text and "15" in text and "21" in text
+        and bool(re.search(r"seasonal[ -]naive", text)) and "15" in text and "21" in text
     )
-    failure_diagnostics = "fails to beat seasonal naive" in text and all(
+    failure_diagnostics = bool(re.search(r"fails to beat seasonal[ -]naive", text)) and all(
         term in text for term in ("missingness", "volatility", "pollutant level")
     )
     return readiness or rolling or failure_diagnostics

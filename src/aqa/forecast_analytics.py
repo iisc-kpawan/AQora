@@ -147,7 +147,7 @@ class ForecastAnalytics:
         except ValidationError as exc:
             raise DataUnavailableError(exc.message) from exc
         evaluation_requested = any(term in text for term in (
-            "evaluate", "against", "backtest", "accuracy", "mae", "rmse", "mase", "verify",
+            "evaluate", "against", "backtest", "accuracy", "mae", "rmse", "mase", "smape", "verify",
         ))
         output = []
         unit = next((row["unit"] for row in rows if row.get("unit")), "concentration")
@@ -169,7 +169,7 @@ class ForecastAnalytics:
         if evaluation_requested and metrics:
             answer = (
                 f"The leakage-safe {_model_label(forecast.model)} backtest for {location} {pollutant} has MAE {metrics['mae']:.2f}, "
-                f"RMSE {metrics['rmse']:.2f}, MASE {_format_optional(metrics['mase'])}, and bias {metrics['bias']:.2f} {unit}. "
+                f"RMSE {metrics['rmse']:.2f}, MASE {_format_optional(metrics['mase'])}, sMAPE {metrics['smape']:.1f}%, and bias {metrics['bias']:.2f} {unit}. "
                 f"It was scored against {metrics['observed_target_count']} directly observed target hours; seasonal naive MAE was {baseline_metrics['mae']:.2f}."
             )
         else:
@@ -380,7 +380,7 @@ def _rolling_result(backtest: dict, *, item, location: str, pollutant: str, unit
             "issue_time": local_issue.astimezone(timezone.utc).isoformat(),
             "issue_time_local": origin["issue_time"], "location": location, "pollutant": pollutant,
             "model": forecast.model, "mae": metrics.get("mae"), "rmse": metrics.get("rmse"),
-            "mase": metrics.get("mase"), "bias": metrics.get("bias"),
+            "mase": metrics.get("mase"), "smape": metrics.get("smape"), "bias": metrics.get("bias"),
             "interval_coverage": metrics.get("interval_coverage"),
             "observed_target_count": metrics.get("observed_target_count"),
             "baseline_mae": (forecast.baseline_metrics or {}).get("mae"),
@@ -393,7 +393,7 @@ def _rolling_result(backtest: dict, *, item, location: str, pollutant: str, unit
     metrics = backtest["metrics"]; baseline = backtest["baseline_metrics"]
     answer = (
         f"The {backtest['origin_count']}-origin {location} {pollutant} backtest has aggregate MAE {metrics['mae']:.2f}, "
-        f"RMSE {metrics['rmse']:.2f}, MASE {_format_optional(metrics.get('mase'))}, and bias {metrics['bias']:.2f} {unit}. "
+        f"RMSE {metrics['rmse']:.2f}, MASE {_format_optional(metrics.get('mase'))}, sMAPE {metrics['smape']:.1f}%, and bias {metrics['bias']:.2f} {unit}. "
         f"It used {backtest['observed_target_count']} directly observed target hours; seasonal-naive MAE was {baseline['mae']:.2f}. "
         f"Every origin enforced the configured {maximum_filled:.0%} maximum filled input fraction."
     )
@@ -403,7 +403,7 @@ def _rolling_result(backtest: dict, *, item, location: str, pollutant: str, unit
             "dataset": item.dataset, "operation": "rolling_backtest", "geography_level": "city",
             "locations": [location], "pollutants": [pollutant],
             "time_range": {"start": rows[0]["issue_time"], "end": rows[-1]["issue_time"]},
-            "resolution": "daily_origins", "metrics": ["mae", "rmse", "mase", "bias", "interval_coverage"],
+            "resolution": "daily_origins", "metrics": ["mae", "rmse", "mase", "smape", "bias", "interval_coverage"],
             "filters": {"maximum_input_filled_fraction": maximum_filled, "observed_targets_only": True},
         },
         "resolved_period": {"start": rows[0]["issue_time"], "end": rows[-1]["issue_time"], "basis": issue_basis},

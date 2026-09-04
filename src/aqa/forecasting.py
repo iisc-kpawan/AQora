@@ -268,8 +268,11 @@ def _metrics(actual: np.ndarray, predicted: np.ndarray, scale: float | None,
              interval_hits: np.ndarray | None) -> dict[str, float | int | None]:
     error = predicted - actual
     mae = float(np.mean(np.abs(error)))
+    denominator = (np.abs(actual) + np.abs(predicted)) / 2
+    smape_terms = np.divide(np.abs(error), denominator, out=np.zeros_like(error), where=denominator > 0)
     return {
         "mae": mae, "rmse": float(np.sqrt(np.mean(error ** 2))), "mase": mae / scale if scale else None,
+        "smape": float(np.mean(smape_terms)) * 100,
         "bias": float(np.mean(error)),
         "interval_coverage": float(np.mean(interval_hits)) if interval_hits is not None else None,
         "observed_target_count": int(len(actual)),

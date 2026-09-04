@@ -14,7 +14,7 @@ from .catalog import Catalog, canonical_pollutant
 from .config import load_config
 from .errors import DataUnavailableError, ValidationError
 from .periods import resolve_period
-from .queryspec import GeographyLevel, Operation, QuerySpec, Resolution, ValueStatus
+from .queryspec import CorrelationMethod, GeographyLevel, Operation, QuerySpec, Resolution, ValueStatus
 
 
 DATE_TRUNC = {
@@ -394,9 +394,18 @@ class AnalyticsEngine:
                 pairs = [(by_pollutant[names[0]][key], by_pollutant[names[1]][key]) for key in common]
                 pairs = [(a, b) for a, b in pairs if a is not None and b is not None]
                 if len(pairs) >= 2:
-                    import numpy as np
-                    value = float(np.corrcoef([a for a, _ in pairs], [b for _, b in pairs])[0, 1])
-                    return rows, {"operation": "correlation", "pollutants": names, "pearson_r": value, "paired_buckets": len(pairs)}
+                    from scipy import stats as scipy_stats
+                    method = spec.filters.correlation_method
+                    correlate = {
+                        CorrelationMethod.pearson: scipy_stats.pearsonr,
+                        CorrelationMethod.spearman: scipy_stats.spearmanr,
+                        CorrelationMethod.kendall: scipy_stats.kendalltau,
+                    }[method]
+                    value, p_value = correlate([a for a, _ in pairs], [b for _, b in pairs])
+                    return rows, {
+                        "operation": "correlation", "pollutants": names, "correlation_method": method.value,
+                        "correlation": float(value), "p_value": float(p_value), "paired_buckets": len(pairs),
+                    }
         return rows, {"operation": spec.operation.value}
 
     @staticmethod

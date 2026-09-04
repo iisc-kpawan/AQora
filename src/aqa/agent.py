@@ -365,6 +365,9 @@ def rule_based_plan(question: str) -> QuerySpec:
     filters = {"value_status": "any"}
     if threshold_match:
         operation = "exceedance"; filters["threshold"] = float(threshold_match.group(1))
+    if operation == "correlation":
+        if "spearman" in text: filters["correlation_method"] = "spearman"
+        elif "kendall" in text: filters["correlation_method"] = "kendall"
     if operation == "rank":
         metric = "mean"
         if year and resolution == "daily":
@@ -438,8 +441,9 @@ def explain_result(question: str, result: dict) -> str:
                    f"at {top[metric]:.2f} {unit}. The ranking compares {len(data)} cities and uses {meta['station_count']} monitoring stations in total.")
     elif spec["operation"] == "exceedance":
         summary = f"The threshold was exceeded in {analysis.get('exceedance_count', len(data))} of {analysis.get('total_buckets', len(data))} {spec['resolution']} periods between {start} and {end}."
-    elif spec["operation"] == "correlation" and analysis.get("pearson_r") is not None:
-        summary = f"The Pearson correlation was {analysis['pearson_r']:.3f} across {analysis['paired_buckets']} matched {spec['resolution']} periods between {start} and {end}."
+    elif spec["operation"] == "correlation" and analysis.get("correlation") is not None:
+        method = analysis.get("correlation_method", "pearson").capitalize()
+        summary = f"The {method} correlation was {analysis['correlation']:.3f} across {analysis['paired_buckets']} matched {spec['resolution']} periods between {start} and {end}."
     elif metric and len(data) == 1:
         row = data[0]
         summary = f"The {metric} {row.get('pollutant', spec['pollutants'][0])} value for {row.get('location', spec['locations'][0])} was {row[metric]:.2f} {unit} between {start} and {end}."
