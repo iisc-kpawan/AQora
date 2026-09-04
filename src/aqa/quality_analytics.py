@@ -9,7 +9,7 @@ from typing import Any
 
 import duckdb
 
-from .capabilities import CapabilityAssessment, is_flexible_country_cohort
+from .capabilities import CapabilityAssessment, _coverage_sensitivity_supported, is_flexible_country_cohort
 from .config import load_config
 from .errors import DataUnavailableError
 from .global_analytics import POLLUTANTS, _period, _top_n
@@ -60,6 +60,11 @@ class QualityAnalytics:
 
     def should_handle(self, question: str, assessment: CapabilityAssessment) -> bool:
         if assessment.intent in {"forecast", "aqi_or_exceedance", "ranking"}:
+            return False
+        if _coverage_sensitivity_supported(question.casefold()):
+            # A dedicated coverage-threshold sensitivity request (ThresholdAnalytics)
+            # rather than a generic multi-metric quality-cube lookup, even though it
+            # also mentions "mean" and "coverage".
             return False
         return is_quality_cube_question(question)
 
