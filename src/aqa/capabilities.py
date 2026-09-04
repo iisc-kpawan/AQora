@@ -36,7 +36,7 @@ ADVANCED_METHODS = {
     "compound seasonal/cohort analysis": r"predefined seasonal windows|seasonal-strength metric|matching months|matched non-missing|active monitoring-station composition",
     "multi-constraint ranking or sensitivity": r"rank stability|different coverage thresholds|station-weighted versus city-balanced|robust to coverage|own 95th-percentile|duration [×x] mean exceedance",
     "AQI category-burden comparison": r"aqi category burden|classification as high-burden|using only dates for which both cities",
-    "configured guideline comparison": r"two different configured .*guideline|configured concentration guideline",
+    "configured guideline comparison": r"two different configured .*guideline",
     "ingestion reliability decomposition": r"ingestion success|late-arrival recovery|delayed, missing, invalid",
     "forecast evaluation experiment": r"forecast-model ranking|forecast accuracy across|rolling[- ]origin|backtests? for eligible|context gaps|fails? to beat seasonal naive|same issue time|forecasting evaluation under",
     "compound year-over-year attribution": r"year over year.*three months|year-over-year.*contributing|pm2\.5 improved.*o3 worsened|worsening pm2\.5 and o3",
