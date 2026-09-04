@@ -26,6 +26,12 @@ POLLUTANTS = (
 MONTHS = {name.casefold(): number for number, name in enumerate(calendar.month_name) if name}
 MONTHS.update({name.casefold(): number for number, name in enumerate(calendar.month_abbr) if name})
 CITY_TERMS = ("delhi", "mumbai", "chennai", "kolkata", "bengaluru", "bangalore", "beijing", "shanghai", "guangzhou", "shenzhen", "london", "seoul")
+METRIC_LABELS = {
+    "mean": "average", "median": "median", "max": "maximum", "min": "minimum",
+    "std": "standard deviation", "variance": "variance", "p05": "5th percentile",
+    "p25": "25th percentile", "p75": "75th percentile", "p95": "95th percentile",
+    "count": "count", "coverage": "coverage",
+}
 
 
 class GlobalAnalytics:
@@ -347,7 +353,18 @@ def _answer(question: str, intent: str, rows: list[dict], metric: str, pollutant
         row = rows[0]
         answer = f"The equal-weight station {metric} {pollutant} concentration in {row['country']} was {row[metric]:.2f} {unit} during {period}, using {provenance}."
     else:
-        answer = f"I calculated {len(rows)} country-period {pollutant} results for {period} using {provenance}."
+        values = [row[metric] for row in rows if row.get(metric) is not None]
+        overall = sum(values) / len(values)
+        highest, lowest = max(rows, key=lambda row: row[metric]), min(rows, key=lambda row: row[metric])
+        metric_label = METRIC_LABELS.get(metric, metric)
+        highest_date = datetime.fromisoformat(highest["timestamp"]).strftime("%d %b %Y")
+        lowest_date = datetime.fromisoformat(lowest["timestamp"]).strftime("%d %b %Y")
+        answer = (
+            f"From {period}, the {metric_label} {pollutant} in {rows[0]['country']} was {overall:.2f} {unit} "
+            f"(daily values ranged from {lowest[metric]:.2f} {unit} on {lowest_date} "
+            f"to {highest[metric]:.2f} {unit} on {highest_date}), using {provenance}. "
+            f"The result contains {len(rows)} periods."
+        )
     constraints = []
     if minimum_coverage is not None:
         constraints.append(f"at least {minimum_coverage:.0%} coverage")

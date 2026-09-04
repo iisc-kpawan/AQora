@@ -537,6 +537,14 @@ def _time_range_from_question(text: str) -> dict[str, str]:
     return _confident_time_range_from_question(text) or {"period": "last month"}
 
 
+METRIC_LABELS = {
+    "mean": "average", "median": "median", "max": "maximum", "min": "minimum",
+    "std": "standard deviation", "variance": "variance", "p05": "5th percentile",
+    "p25": "25th percentile", "p75": "75th percentile", "p95": "95th percentile",
+    "count": "count", "coverage": "coverage",
+}
+
+
 def explain_result(question: str, result: dict) -> str:
     data, meta, period = result["data"], result["metadata"], result["resolved_period"]
     spec, analysis = result["query_spec"], result.get("analysis") or {}
@@ -573,9 +581,14 @@ def explain_result(question: str, result: dict) -> str:
         summary = f"The {metric} {row.get('pollutant', spec['pollutants'][0])} value for {row.get('location', spec['locations'][0])} was {row[metric]:.2f} {unit} between {start} and {end}."
     elif metric:
         valid = [row for row in data if row.get(metric) is not None]
+        values = [row[metric] for row in valid]
+        overall = sum(values) / len(values)
         highest, lowest = max(valid, key=lambda row: row[metric]), min(valid, key=lambda row: row[metric])
-        summary = (f"From {start} to {end}, {spec['pollutants'][0]} ranged from {lowest[metric]:.2f} {unit} on {_date_label(lowest['timestamp'])} "
-                   f"to {highest[metric]:.2f} {unit} on {_date_label(highest['timestamp'])}. The result contains {len(valid)} {spec['resolution']} periods from {meta['station_count']} stations.")
+        metric_label = METRIC_LABELS.get(metric, metric)
+        summary = (f"From {start} to {end}, the {metric_label} {spec['pollutants'][0]} was {overall:.2f} {unit} "
+                   f"(daily values ranged from {lowest[metric]:.2f} {unit} on {_date_label(lowest['timestamp'])} "
+                   f"to {highest[metric]:.2f} {unit} on {_date_label(highest['timestamp'])}). "
+                   f"The result contains {len(valid)} {spec['resolution']} periods from {meta['station_count']} stations.")
     else:
         summary = f"The query returned {len(data)} results covering {start} to {end}."
     if meta.get("station_balanced") and meta.get("station_count", 0) > 1:
