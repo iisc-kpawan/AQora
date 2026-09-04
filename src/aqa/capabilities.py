@@ -190,7 +190,9 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
                 continue
             if method in {"compound data-quality uncertainty", "multi-constraint ranking or sensitivity", "simulation/sensitivity experiment"} and _provenance_policy_supported(text, assessment.intent):
                 continue
-            if method == "bootstrap uncertainty" and _sampling_bootstrap_supported(text):
+            if method == "bootstrap uncertainty" and (
+                _sampling_bootstrap_supported(text) or _matched_month_city_balanced_bootstrap_supported(text)
+            ):
                 continue
             if method == "aggregation-method comparison" and _aggregation_comparison_supported(text):
                 continue
@@ -250,6 +252,14 @@ def _provenance_policy_supported(text: str, intent: str) -> bool:
 
 def _sampling_bootstrap_supported(text: str) -> bool:
     return "bootstrap" in text and "station" in text and any(term in text for term in ("mean", "sampling", "country-level"))
+
+
+def _matched_month_city_balanced_bootstrap_supported(text: str) -> bool:
+    return (
+        re.search(r"matched months?", text) is not None
+        and "city-balanced" in text
+        and any(term in text for term in ("uncertainty interval", "confidence interval", "bootstrap"))
+    )
 
 
 def _aggregation_comparison_supported(text: str) -> bool:
