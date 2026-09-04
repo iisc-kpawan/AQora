@@ -1,0 +1,11 @@
+level,question_number,question
+L1,Q1,How many monitoring stations are available for PM2.5 in India?
+L1,Q2,What was the mean PM2.5 concentration in India on 27 August 2026?
+L2,Q1,"Compare mean PM2.5 concentrations in India, China, and the United States during July 2026 and report pairwise absolute differences."
+L2,Q2,Rank all available countries by mean PM2.5 concentration during July 2026 and return the top 10.
+L3,Q1,"Among countries with at least 80% PM2.5 data coverage in July 2026, rank the top 10 by mean PM2.5 concentration."
+L3,Q2,"Using data through 20 August 2026 23:00 UTC, forecast Delhi PM2.5 for the next 24 hours using the configured primary model and a seasonal-naive baseline, and report MAE for both against observations from 21 August."
+L4,Q1,Evaluate imputation error on artificially masked 1-hour and 3-hour PM2.5 gaps using a reproducible sample of complete station sequences from July 2026.
+L4,Q2,"Rank countries by mean PM2.5 concentration in July 2026 using only countries with at least 80% coverage and 10 active PM2.5 stations; return the top 10 and the number of excluded countries."
+L5,Q1,"Benchmark the configured short-gap imputation method against forward fill, linear interpolation, and seasonal interpolation using reproducibly masked complete PM2.5 sequences across multiple countries."
+L5,Q2,"Run rolling 24-hour PM2.5 backtests for eligible cities over 15-21 August 2026, compare the configured forecasting model with a seasonal-naive baseline, and report aggregate and per-city MASE with confidence intervals, where supported."

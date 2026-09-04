@@ -8,6 +8,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import duckdb
+import numpy as np
 
 from .capabilities import CapabilityAssessment, MONTHS
 from .config import load_config
@@ -46,6 +47,13 @@ class ForecastAnalytics:
         return assessment.intent == "forecast" or any(term in text for term in ("forecast", "backtest", "mase"))
 
     def execute(self, question: str, assessment: CapabilityAssessment) -> dict[str, Any]:
+        horizons = _comparison_horizons(question.casefold())
+        if len(horizons) >= 2:
+            return self._multi_horizon_comparison(question, assessment, horizons)
+        return self._execute_single(question, assessment)
+
+    def _execute_single(self, question: str, assessment: CapabilityAssessment,
+                        horizon_override: int | None = None) -> dict[str, Any]:
         started = time.perf_counter()
         text = question.casefold()
         selected = list(self.catalog.selected(assessment.supported_datasets))
@@ -63,7 +71,7 @@ class ForecastAnalytics:
         if len(pollutant_matches) != 1:
             raise DataUnavailableError("Concentration forecasting requires exactly one pollutant")
         pollutant = pollutant_matches[0]
-        horizon = _horizon(text, int(self.config["forecasting"].get("horizon_hours", 24)))
+        horizon = horizon_override or _horizon(text, int(self.config["forecasting"].get("horizon_hours", 24)))
         issue_times_utc, issue_basis = _issue_times(text, item.available_end, timezone_name)
         issue_utc = issue_times_utc[0]
         local_zone = ZoneInfo(timezone_name)
@@ -139,7 +147,7 @@ class ForecastAnalytics:
         except ValidationError as exc:
             raise DataUnavailableError(exc.message) from exc
         evaluation_requested = any(term in text for term in (
-            "evaluate", "against", "backtest", "accuracy", "mae", "rmse", "mase", "verify",
+            "evaluate", "against", "backtest", "accuracy", "mae", "rmse", "mase", "smape", "verify",
         ))
         output = []
         unit = next((row["unit"] for row in rows if row.get("unit")), "concentration")
@@ -161,7 +169,7 @@ class ForecastAnalytics:
         if evaluation_requested and metrics:
             answer = (
                 f"The leakage-safe {_model_label(forecast.model)} backtest for {location} {pollutant} has MAE {metrics['mae']:.2f}, "
-                f"RMSE {metrics['rmse']:.2f}, MASE {_format_optional(metrics['mase'])}, and bias {metrics['bias']:.2f} {unit}. "
+                f"RMSE {metrics['rmse']:.2f}, MASE {_format_optional(metrics['mase'])}, sMAPE {metrics['smape']:.1f}%, and bias {metrics['bias']:.2f} {unit}. "
                 f"It was scored against {metrics['observed_target_count']} directly observed target hours; seasonal naive MAE was {baseline_metrics['mae']:.2f}."
             )
         else:
@@ -213,6 +221,62 @@ class ForecastAnalytics:
                 "provider": "deterministic", "model": "hourly_forecast_v1", "latency_ms": 0,
                 "prompt_tokens": None, "completion_tokens": None, "fallback_used": False,
             },
+        }
+
+    def _multi_horizon_comparison(self, question: str, assessment: CapabilityAssessment,
+                                  horizons: list[int]) -> dict[str, Any]:
+        started = time.perf_counter()
+        results = [self._execute_single(question, assessment, horizon_override=horizon) for horizon in horizons]
+        rows = []
+        for horizon, result in zip(horizons, results):
+            values = result["data"]
+            rows.append({
+                "horizon_hours": horizon,
+                "predicted_mean": float(np.mean([row["forecast"] for row in values])),
+                "predicted_maximum": float(np.max([row["forecast"] for row in values])),
+                "seasonal_naive_mean": float(np.mean([row["baseline_forecast"] for row in values])),
+                "model": result["analysis"]["model"],
+                "issue_time_utc": result["metadata"]["issue_time_utc"],
+                "input_filled_fraction": float(result["analysis"]["input_quality"]["filled_fraction"]),
+                "location": result["query_spec"]["locations"][0],
+                "pollutant": result["query_spec"]["pollutants"][0],
+                "unit": values[0]["unit"],
+            })
+        issue_times = {row["issue_time_utc"] for row in rows}
+        if len(issue_times) != 1:
+            raise DataUnavailableError("Multi-horizon comparison did not resolve to one common issue time")
+        location = rows[0]["location"]; pollutant = rows[0]["pollutant"]; unit = rows[0]["unit"]
+        summary = ", ".join(f"{row['horizon_hours']}h: {row['predicted_mean']:.2f} {unit}" for row in rows)
+        answer = (
+            f"Using the same {rows[0]['issue_time_utc']} issue time and identical leakage-safe context, the predicted means for "
+            f"{location} {pollutant} are {summary}. Each horizon was selected and calculated independently with the configured model registry. "
+            "Forecasts are estimates, not measurements."
+        )
+        return {
+            "kind": "analytics",
+            "query_spec": {
+                "dataset": results[0]["query_spec"]["dataset"], "operation": "multi_horizon_forecast_comparison",
+                "geography_level": "city", "locations": [location], "pollutants": [pollutant],
+                "time_range": {"start": rows[0]["issue_time_utc"], "end": results[-1]["resolved_period"]["end"]},
+                "resolution": "forecast_horizon", "metrics": ["predicted_mean", "predicted_maximum", "seasonal_naive_mean"],
+                "filters": {"same_issue_time": True, "horizons": horizons},
+            },
+            "resolved_period": {"start": rows[0]["issue_time_utc"], "end": results[-1]["resolved_period"]["end"],
+                                "basis": "one common issue time with independently evaluated forecast horizons"},
+            "data": rows,
+            "metadata": {
+                **results[0]["metadata"], "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+                "value_status": "model_estimate",
+            },
+            "visualization": {"type": "bar"},
+            "analysis": {
+                "operator": "multi_horizon_forecast_comparison_v1", "horizons": horizons,
+                "same_issue_time": True, "future_observations_used_for_training": False,
+                "per_horizon_models": {str(row["horizon_hours"]): row["model"] for row in rows},
+            },
+            "answer": answer, "display_title": f"{location} {pollutant} · multi-horizon forecast",
+            "model_trace": {"provider": "deterministic", "model": "multi_horizon_forecast_comparison_v1",
+                            "latency_ms": 0, "prompt_tokens": None, "completion_tokens": None, "fallback_used": False},
         }
 
     def _stations(self, dataset: str, city: str):
@@ -273,6 +337,16 @@ def _horizon(text: str, default: int) -> int:
     return default
 
 
+def _comparison_horizons(text: str) -> list[int]:
+    match = re.search(r"for\s+([0-9,\sand]+?)\s+hours?\b", text)
+    if not match or "same issue time" not in text:
+        return []
+    values = list(dict.fromkeys(int(value) for value in re.findall(r"\d+", match.group(1))))
+    if any(value < 1 or value > 720 for value in values):
+        raise DataUnavailableError("Forecast horizons must be between 1 and 720 hours")
+    return values
+
+
 def _model(text: str, default: str) -> str:
     if "linear trend" in text:
         return "linear_trend"
@@ -306,7 +380,7 @@ def _rolling_result(backtest: dict, *, item, location: str, pollutant: str, unit
             "issue_time": local_issue.astimezone(timezone.utc).isoformat(),
             "issue_time_local": origin["issue_time"], "location": location, "pollutant": pollutant,
             "model": forecast.model, "mae": metrics.get("mae"), "rmse": metrics.get("rmse"),
-            "mase": metrics.get("mase"), "bias": metrics.get("bias"),
+            "mase": metrics.get("mase"), "smape": metrics.get("smape"), "bias": metrics.get("bias"),
             "interval_coverage": metrics.get("interval_coverage"),
             "observed_target_count": metrics.get("observed_target_count"),
             "baseline_mae": (forecast.baseline_metrics or {}).get("mae"),
@@ -319,7 +393,7 @@ def _rolling_result(backtest: dict, *, item, location: str, pollutant: str, unit
     metrics = backtest["metrics"]; baseline = backtest["baseline_metrics"]
     answer = (
         f"The {backtest['origin_count']}-origin {location} {pollutant} backtest has aggregate MAE {metrics['mae']:.2f}, "
-        f"RMSE {metrics['rmse']:.2f}, MASE {_format_optional(metrics.get('mase'))}, and bias {metrics['bias']:.2f} {unit}. "
+        f"RMSE {metrics['rmse']:.2f}, MASE {_format_optional(metrics.get('mase'))}, sMAPE {metrics['smape']:.1f}%, and bias {metrics['bias']:.2f} {unit}. "
         f"It used {backtest['observed_target_count']} directly observed target hours; seasonal-naive MAE was {baseline['mae']:.2f}. "
         f"Every origin enforced the configured {maximum_filled:.0%} maximum filled input fraction."
     )
@@ -329,7 +403,7 @@ def _rolling_result(backtest: dict, *, item, location: str, pollutant: str, unit
             "dataset": item.dataset, "operation": "rolling_backtest", "geography_level": "city",
             "locations": [location], "pollutants": [pollutant],
             "time_range": {"start": rows[0]["issue_time"], "end": rows[-1]["issue_time"]},
-            "resolution": "daily_origins", "metrics": ["mae", "rmse", "mase", "bias", "interval_coverage"],
+            "resolution": "daily_origins", "metrics": ["mae", "rmse", "mase", "smape", "bias", "interval_coverage"],
             "filters": {"maximum_input_filled_fraction": maximum_filled, "observed_targets_only": True},
         },
         "resolved_period": {"start": rows[0]["issue_time"], "end": rows[-1]["issue_time"], "basis": issue_basis},

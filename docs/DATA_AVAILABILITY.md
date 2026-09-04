@@ -13,3 +13,8 @@ database, partition, station file, or ingestion checkpoint is included here.
 Portable unit tests construct small synthetic values in memory and therefore do
 not require access to the research corpus.
 
+The authors' own ingested corpus and built lakehouse, used to produce the
+results reported in the paper, currently reside only on the authors' server.
+They are not distributed with this repository and will be made available for
+public access after the paper's review period concludes.
+
