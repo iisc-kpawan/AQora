@@ -518,10 +518,22 @@ def _confident_time_range_from_question(text: str) -> dict[str, str] | None:
     month_names = {name.casefold(): number for number, name in enumerate(calendar.month_name) if name}
     month_names.update({name.casefold(): number for number, name in enumerate(calendar.month_abbr) if name})
     names = "|".join(sorted(month_names, key=len, reverse=True))
-    day_matches = list(re.finditer(rf"\b(\d{{1,2}})\s+({names})\s+(20\d{{2}})\b", text))
+    day_matches = list(re.finditer(rf"\b(\d{{1,2}})\s+({names})\s+(20\d{{2}})(?:\s+(\d{{1,2}}):(\d{{2}}))?\b", text))
     if day_matches:
-        values = [datetime(int(item.group(3)), month_names[item.group(2)], int(item.group(1))) for item in day_matches]
-        start, end = values[0], values[-1].replace(hour=23, minute=59, second=59)
+        # An explicit trailing time (e.g. a forecast issue timestamp like "31
+        # May 2026 23:00") means exactly that instant, not end-of-day --
+        # matches how available_end is always stored (on the hour, never at
+        # 23:59:59), so forcing 23:59:59 here would push the requested end
+        # 59 minutes past data that is actually available through this exact
+        # moment.
+        values = [
+            datetime(int(item.group(3)), month_names[item.group(2)], int(item.group(1)),
+                     int(item.group(4)), int(item.group(5))) if item.group(4)
+            else datetime(int(item.group(3)), month_names[item.group(2)], int(item.group(1)))
+            for item in day_matches
+        ]
+        start = values[0]
+        end = values[-1] if day_matches[-1].group(4) else values[-1].replace(hour=23, minute=59, second=59)
         return {"start": start.isoformat(), "end": end.isoformat()}
     month_matches = list(re.finditer(rf"\b({names})\s+(20\d{{2}})\b", text))
     if month_matches:
