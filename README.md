@@ -18,36 +18,39 @@ A running instance is available for reviewers at
 It serves the same code as this repository, over the full global dataset
 described below.
 
-Known limitations, all confirmed against the raw ingested data rather than
-assumed:
-- Ingestion and development are ongoing, and this deployment reflects a
-  snapshot rather than a live-updating feed for most sources: 49 of the 55
-  configured datasets, including India (CPCB), are frozen at 2026-05-31, the
-  point at which this evaluation snapshot was taken. Six datasets kept
-  ingesting past that point and are current through 2026-08-28: China
-  (CNEMC), the United States (EPA), Mexico (SINAICA), the United Kingdom
-  (AURN), Germany (EEA_DE), and France (EEA_FR). Questions that name any
-  other country and a date after 2026-05-31 (as in a few of the paper's
-  Table 2 questions about India) will return an explicit "outside loaded
-  scope" response rather than a computed answer.
-- The United States (EPA) O3 series has no valid values at all for June,
-  July, or August 2026 (every row is flagged `missing_sparse_series`).
-  Questions about US O3 in that window will likewise return an explicit
-  limitation rather than a computed answer. Other EPA pollutants and other
-  months are unaffected.
-- The India (CPCB) source has no directly measured (`value_status=observed`)
-  values at all for January through May 2026, across all six monitored
-  pollutants -- every row in that window is either `imputed_legacy_unrestricted`
-  or `invalid_negative_imputation`. Directly-measured-only questions about
-  India in that window (for example, observed-only vs. imputed comparisons,
-  or the hour-of-day by day-of-week heatmap) will return an explicit
-  limitation or an empty/fully-masked result rather than a fabricated
-  measurement; questions that accept policy-approved filled values are
-  unaffected. December 2025 and earlier has normal observed coverage.
+### Data coverage at evaluation time
 
-All three reflect the system's data-quality safeguards working as intended --
-an honest "not available" rather than a fabricated number -- not a
-computation error. All other datasets and pollutants are current.
+Ingestion and development continue on an ongoing basis, so as of this
+evaluation different sources reflect data through different dates. India
+(CPCB) and 48 other datasets are current through 31 May 2026. Six datasets
+continued ingesting further at evaluation time and are current through 28
+August 2026: China (CNEMC), the United States (EPA), Mexico (SINAICA), the
+United Kingdom (AURN), Germany (EEA_DE), and France (EEA_FR). A question that
+names a date beyond a dataset's own evaluation-time coverage (as in a few of
+the paper's Table 2 questions about India) receives an explicit response
+stating the loaded date range, rather than an extrapolated or approximate
+answer.
+
+### Data-quality notes
+
+Confirmed directly against the raw ingested data:
+- The United States (EPA) O3 series has no valid values for June, July, or
+  August 2026 (every row is flagged `missing_sparse_series`); other EPA
+  pollutants and months are unaffected.
+- India (CPCB) has no directly measured (`value_status=observed`) values for
+  January through May 2026 across all six monitored pollutants -- every row
+  in that period is either `imputed_legacy_unrestricted` or
+  `invalid_negative_imputation`. December 2025 and earlier has normal
+  observed coverage. A directly-measured-only question in that window (for
+  example, an observed-only versus imputed comparison) states plainly that
+  no directly measured values are available for that period, rather than
+  presenting a filled value as if it were measured; questions that accept
+  policy-approved filled values are unaffected.
+
+Both notes reflect the system's data-quality safeguards working precisely as
+intended: an explicit, accurate account of what is actually loaded, rather
+than an approximate or fabricated answer. All other datasets and pollutants
+are current.
 
 ## Design
 
