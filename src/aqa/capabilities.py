@@ -188,6 +188,8 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
                 continue
             if method == "historical observed/imputed split" and _provenance_policy_supported(text, assessment.intent):
                 continue
+            if method == "compound provenance trend sensitivity" and _provenance_policy_supported(text, assessment.intent):
+                continue
             if method in {"compound data-quality uncertainty", "multi-constraint ranking or sensitivity", "simulation/sensitivity experiment"} and _provenance_policy_supported(text, assessment.intent):
                 continue
             if method == "bootstrap uncertainty" and (
