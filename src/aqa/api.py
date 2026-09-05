@@ -4,7 +4,6 @@ import csv
 import io
 import os
 from dataclasses import asdict
-from datetime import timedelta
 from pathlib import Path
 
 import httpx
@@ -17,7 +16,6 @@ from .agent import ConversationalAgent
 from .analytics import AnalyticsEngine
 from .aqi import DEFAULT_STANDARD, STANDARDS, calculate_aqi
 from .errors import AQAError, ValidationError
-from .forecasting import forecast_series
 from .queryspec import QuerySpec
 from .lakehouse_catalog import LakehouseCatalog
 
@@ -161,21 +159,32 @@ def create_app() -> FastAPI:
             issue = request.query.time_range.end
         else:
             issue = LakehouseCatalog().by_dataset(request.query.dataset.value).available_end
-        context_hours = int(analytics.config.get("forecasting", {}).get("context_hours", 168))
-        context_start = issue - timedelta(hours=context_hours - 1)
+        location = request.query.locations[0]
+        # Route each pollutant through the same conversational forecast
+        # pipeline /api/forecast uses (ForecastAnalytics.forecast_at_issue),
+        # rather than the legacy AnalyticsEngine + plain forecast_series()
+        # used here previously. That combination had two problems: (1)
+        # forecast_series() has no data-quality check at all, so it would
+        # silently forecast from a context window that's mostly filled
+        # values with no warning; (2) the legacy engine's own catalog cannot
+        # see a dataset's most recent days of data even when they exist,
+        # unlike the LakehouseCatalog-based pipeline every other forecast
+        # path already uses.
         pollutant_forecasts = {}
         model_scores = {}
         for pollutant in ("PM25", "PM10", "NO2", "SO2", "CO", "O3"):
-            raw = request.query.model_dump(mode="json")
-            raw.update({
-                "pollutants": [pollutant], "resolution": "hourly", "metrics": ["mean"], "limit": 10000,
-                "operation": "aggregate",
-                "time_range": {"start": context_start.isoformat(), "end": issue.isoformat()},
-            })
-            result = analytics.execute(QuerySpec.model_validate(raw))
-            predicted = forecast_series(result["data"], horizon=request.horizon)
-            pollutant_forecasts[pollutant] = predicted.values
-            model_scores[pollutant] = {"model": predicted.model, "selection_scores": predicted.selection_scores}
+            question = (
+                f"Forecast {location} {pollutant} for the next {request.horizon} hours "
+                f"using data through {issue:%d %B %Y %H:%M}."
+            )
+            safe = agent.ask(question)
+            if safe["kind"] == "limitation":
+                raise ValidationError(f"{pollutant}: {safe['answer']}")
+            pollutant_forecasts[pollutant] = safe["data"]
+            model_scores[pollutant] = {
+                "model": safe["analysis"]["model"], "selection_scores": safe["analysis"]["selection_scores_observed_mae"],
+                "input_quality": safe["analysis"]["input_quality"],
+            }
         output = []
         for index in range(request.horizon):
             concentrations = {name: values[index]["forecast"] for name, values in pollutant_forecasts.items()}
