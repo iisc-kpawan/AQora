@@ -34,6 +34,7 @@ from .derived_temporal_analytics import DerivedTemporalAnalytics
 from .advanced_aqi_analytics import AdvancedAQIAnalytics
 from .compound_analytics import CompoundAnalytics
 from .burden_episode_analytics import BurdenEpisodeAnalytics
+from .gap_statistics_analytics import GapStatisticsAnalytics
 from .queryspec import Dataset, QuerySpec, TimeRange
 
 
@@ -134,6 +135,7 @@ class ConversationalAgent:
         self.advanced_aqi_analytics = AdvancedAQIAnalytics(self.config)
         self.compound_analytics = CompoundAnalytics(self.config)
         self.burden_episode_analytics = BurdenEpisodeAnalytics(self.config)
+        self.gap_statistics_analytics = GapStatisticsAnalytics(self.config)
 
     def ask(
         self, question: str, *, provider: str | None = None, model: str | None = None,
@@ -173,6 +175,11 @@ class ConversationalAgent:
         if self.burden_episode_analytics.should_handle(question, assessment):
             try:
                 return self.burden_episode_analytics.execute(question, assessment)
+            except AQAError as exc:
+                return limitation_result(question, assessment, self.config, extra_reason=exc.message)
+        if self.gap_statistics_analytics.should_handle(question, assessment):
+            try:
+                return self.gap_statistics_analytics.execute(question, assessment)
             except AQAError as exc:
                 return limitation_result(question, assessment, self.config, extra_reason=exc.message)
         if self.compound_analytics.should_handle(question, assessment):

@@ -165,6 +165,8 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
                 continue
             if method == "change-point detection" and _changepoint_detection_supported(text):
                 continue
+            if method == "gap-length statistics" and _gap_length_statistics_supported(text):
+                continue
             if method in {"derived temporal statistics", "year-over-year country ranking", "bootstrap uncertainty", "compound seasonal/cohort analysis", "compound year-over-year attribution"} and _derived_temporal_supported(text):
                 continue
             if method in {"cross-pollutant derived comparison", "compound seasonal/cohort analysis",
@@ -352,6 +354,18 @@ def _changepoint_detection_supported(text: str) -> bool:
     return not any(term in text for term in (
         "regime", "seven primary", "each country", "every country", "all countries", "primary countries",
     ))
+
+
+def _gap_length_statistics_supported(text: str) -> bool:
+    """Missing-data episode detection and gap-length reporting (GapStatisticsAnalytics).
+
+    Excludes the one confirmed example that asks for a compound "data
+    reliability" score combining gap length with several other unrelated
+    factors (coverage, imputation fraction, active-station stability) --
+    that composite scoring method doesn't exist and building it is a
+    separate, larger decision than plain gap-length statistics.
+    """
+    return not ("reliability" in text and "coverage" in text and "imputation fraction" in text)
 
 
 def _rank_stability_supported(text: str) -> bool:
