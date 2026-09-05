@@ -32,7 +32,7 @@ ADVANCED_METHODS = {
     "historical observed/imputed split": r"observed[- ]only.*(?:imputed|filled)|(?:imputed|filled).*observed[- ]only|imputed fraction|fraction .* imputed|measured (?:versus|vs\.?) filled",
     "year-over-year country ranking": r"rank countries by year-over-year|rank countries by year over year",
     "weekday/diurnal cohort comparison": r"weekday.*weekend|weekday diurnal|hour-of-day by day-of-week|jointly observed in both cities",
-    "cross-standard AQI comparison": r"local aqi frameworks|common .*exceedance metric.*aqi|comparable from non-comparable",
+    "cross-standard AQI comparison": r"local aqi frameworks|common .*exceedance metric.*aqi|comparable from non-comparable|us[- ]epa[- ]style|us epa aqi",
     "compound seasonal/cohort analysis": r"predefined seasonal windows|seasonal-strength metric|matching months|matched non-missing|active monitoring-station composition",
     "multi-constraint ranking or sensitivity": r"rank stability|different coverage thresholds|station-weighted versus city-balanced|robust to coverage|own 95th-percentile|duration [×x] mean exceedance",
     "AQI category-burden comparison": r"aqi category burden|classification as high-burden|using only dates for which both cities",
