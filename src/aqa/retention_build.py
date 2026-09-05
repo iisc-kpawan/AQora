@@ -85,7 +85,7 @@ def discover_series(data_root: str | Path) -> list[SeriesPair]:
                                root / "OpenAQ" / country_code / "imputed_import",
                                root / "OpenAQ" / country_code / "processed_import", "historical", 0))
 
-    recent = root / "source_import" / "AtmoBench" / "new_data"
+    recent = root / "source_import" / "UpstreamDataset" / "new_data"
     recent_sources = [
         ("AURN", "AURN", "GB", "United Kingdom", recent / "aurn"),
         ("CNEMC", "CNEMC", "CN", "China", recent / "CNEMC"),
@@ -160,7 +160,7 @@ def build_retention_store(
         bounds = _materialize_query_tiers(connection, archive, query, hot_months)
         _write_control_database(connection, staging / "control" / "retention.duckdb", archive, query, bounds)
         refresh_value_availability(staging)
-        refresh_station_dimension(staging, Path(config["_project_root"]) / "reference" / "AtmoBench" / "Metadata")
+        refresh_station_dimension(staging, Path(config["_project_root"]) / "reference" / "UpstreamDataset" / "Metadata")
         refresh_quality_cube(staging)
         refresh_area_daily(staging)
     except Exception:
@@ -310,7 +310,7 @@ def _write_archive_group(connection: duckdb.DuckDBPyConnection, archive: Path, g
                             WHEN j.valid_count::DOUBLE / nullif(j.total_count, 0) < 0.05 THEN 'missing_sparse_series'
                             ELSE 'missing_unresolved_gap' END AS value_status,
                        CASE WHEN (j.observed_raw < 0 OR j.observed_raw IS NULL) AND j.legacy_imputed_raw >= 0
-                            THEN 'atmobench_mstl'
+                            THEN 'legacy_mstl'
                             WHEN j.legacy_imputed_raw < 0 OR j.legacy_imputed_raw IS NULL
                             THEN CASE WHEN j.valid_count::DOUBLE / nullif(j.total_count, 0) >= 0.70
                                            AND j.valid_count >= 336 AND j.max_internal_gap <= 336
