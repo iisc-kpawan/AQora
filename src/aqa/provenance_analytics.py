@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 import duckdb
+import numpy as np
 
 from .aqi import DEFAULT_GUIDELINE, get_guideline
 from .capabilities import CapabilityAssessment, is_flexible_country_cohort
@@ -14,6 +15,7 @@ from .config import load_config
 from .errors import DataUnavailableError
 from .global_analytics import POLLUTANTS, _period, _top_n
 from .lakehouse_catalog import LakehouseCatalog
+from .periods import resolve_period
 from .quality_analytics import _requested_cities
 
 
@@ -61,7 +63,17 @@ class ProvenanceAnalytics:
         flexible_cohort = is_flexible_country_cohort(question, assessment.intent)
         if flexible_cohort and not any(term in text for term in ("seven primary", "all seven", "primary countries")):
             selected = list(self.catalog.datasets)
-        if len(selected) > 1 and not flexible_cohort and not _has_period(text):
+        trend_slope_requested = "trend slope" in text
+        if trend_slope_requested and not _has_period(text):
+            # A slope needs multiple points; the default single-latest-month
+            # window below (used when nothing else is requested) can't
+            # produce one, so fall back to a real multi-month span instead --
+            # anchored to the dataset's own current data, not a fixed
+            # calendar date, matching how the rest of the codebase avoids
+            # baking in a specific "now".
+            anchor = min(item.available_end for item in selected)
+            start, end = resolve_period("last 12 complete months", anchor, anchor)
+        elif len(selected) > 1 and not flexible_cohort and not _has_period(text):
             end = min(item.available_end for item in selected)
             start = end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         else:
@@ -74,7 +86,9 @@ class ProvenanceAnalytics:
         geography = "city" if cities else "country_city_balanced" if any(
             term in text for term in ("city-balanced", "city weighted", "city-weighted")
         ) else "country"
-        monthly = any(term in text for term in ("monthly", "each month", "by month", "trajector", "line chart"))
+        monthly = trend_slope_requested or any(
+            term in text for term in ("monthly", "each month", "by month", "trajector", "line chart")
+        )
         bucket_expression = "date_trunc('month', timestamp_local)" if monthly else "TIMESTAMP '1970-01-01'"
         minimum_coverage = _percentage_after(text, ("coverage",))
         minimum_filled = _percentage_after(text, ("imputed", "filled"), comparison="more")
@@ -232,6 +246,8 @@ class ProvenanceAnalytics:
             leaders.sort(key=lambda row: row.get("mean") or -math.inf, reverse=True)
             wanted = {row["dataset"] for row in leaders[:keep]}
             rows = [row for row in rows if row["dataset"] in wanted]
+        if trend_slope_requested:
+            _add_trend_slopes(rows)
         for row in rows:
             row["timestamp"] = (start if row["bucket"].year == 1970 else row["bucket"]).isoformat()
             row["pollutant"] = pollutant
@@ -328,10 +344,30 @@ def _metrics(text: str) -> list[str]:
     values = [name for term, name in (
         ("mean", "mean"), ("average", "mean"), ("median", "median"), ("p95", "p95"),
         ("95th", "p95"), ("maximum", "max"), ("coverage", "coverage"),
+        ("completeness", "coverage"),
         ("imputed", "filled_fraction"), ("filled", "filled_fraction"),
-        ("exceedance", "exceedance_percentage"),
+        ("exceedance", "exceedance_percentage"), ("trend slope", "trend_slope"),
     ) if term in text]
     return list(dict.fromkeys(values)) or ["mean", "filled_fraction"]
+
+
+def _add_trend_slopes(rows: list[dict]) -> None:
+    """Attach a monthly OLS trend slope per (dataset, policy, coverage_threshold).
+
+    Mirrors the plain slope calculation TemporalAnalytics already uses
+    elsewhere (index-position regression against the ordered monthly means),
+    just scoped per value-provenance policy so an observed-only trend and an
+    all-usable trend can be compared side by side.
+    """
+    groups: dict[tuple, list[dict]] = {}
+    for row in rows:
+        groups.setdefault((row["dataset"], row["policy"], row["coverage_threshold"]), []).append(row)
+    for group in groups.values():
+        group.sort(key=lambda row: row["bucket"])
+        points = [(index, row["mean"]) for index, row in enumerate(group) if row.get("mean") is not None]
+        slope = float(np.polyfit([p[0] for p in points], [p[1] for p in points], 1)[0]) if len(points) >= 2 else None
+        for row in group:
+            row["trend_slope"] = slope
 
 
 def _percentage_after(text: str, terms: tuple[str, ...], comparison: str | None = None) -> float | None:
@@ -432,6 +468,18 @@ def _answer(rows: list[dict], pollutant: str, start: datetime, end: datetime,
         answer += f" Every returned policy result meets the {minimum_coverage:.0%} coverage requirement."
     if rank_change is not None:
         answer += f" Returned areas changed rank by at least {rank_change} positions."
+    if any(row.get("trend_slope") is not None for row in rows):
+        parts = []
+        for area in sorted({row["area_name"] for row in rows}):
+            obs = next((row for row in observed if row["area_name"] == area and row.get("trend_slope") is not None), None)
+            used = next((row for row in usable if row["area_name"] == area and row.get("trend_slope") is not None), None)
+            if obs and used:
+                parts.append(
+                    f"{area}: {obs['trend_slope']:+.3f} {obs['unit']}/month measured-only vs. "
+                    f"{used['trend_slope']:+.3f} {used['unit']}/month all-usable"
+                )
+        if parts:
+            answer += " Monthly trend slopes -- " + "; ".join(parts) + "."
     answer += " Each day is formed at station level first, so stations with more raw rows do not receive extra weight. Filled values are never described as measurements."
     return answer
 
