@@ -26,10 +26,9 @@ evaluation different sources reflect data through different dates. India
 continued ingesting further at evaluation time and are current through 28
 August 2026: China (CNEMC), the United States (EPA), Mexico (SINAICA), the
 United Kingdom (AURN), Germany (EEA_DE), and France (EEA_FR). A question that
-names a date beyond a dataset's own evaluation-time coverage (as in a few of
-the paper's Table 2 questions about India) receives an explicit response
-stating the loaded date range, rather than an extrapolated or approximate
-answer.
+names a date beyond a dataset's own evaluation-time coverage receives an
+explicit response stating the loaded date range, rather than an
+extrapolated or approximate answer.
 
 ### Data-quality notes
 
