@@ -4,6 +4,7 @@ import csv
 import io
 import os
 from dataclasses import asdict
+from datetime import timedelta
 from pathlib import Path
 
 import httpx
@@ -150,11 +151,27 @@ def create_app() -> FastAPI:
         if len(request.query.locations) != 1:
             raise ValidationError("Forecast AQI requires exactly one location")
         standard_id = request.standard_id or DEFAULT_STANDARD[request.query.dataset.value]
+        # Anchor the forecast context to the dataset's actual current data
+        # (or an explicit issue time, if the query already named one) rather
+        # than reusing whatever historical period the base chat question
+        # happened to query -- otherwise this silently forecasts starting
+        # right after that old window instead of the next real 24 hours,
+        # matching the same issue-time convention /api/forecast already uses.
+        if request.query.time_range.end is not None:
+            issue = request.query.time_range.end
+        else:
+            issue = LakehouseCatalog().by_dataset(request.query.dataset.value).available_end
+        context_hours = int(analytics.config.get("forecasting", {}).get("context_hours", 168))
+        context_start = issue - timedelta(hours=context_hours - 1)
         pollutant_forecasts = {}
         model_scores = {}
         for pollutant in ("PM25", "PM10", "NO2", "SO2", "CO", "O3"):
             raw = request.query.model_dump(mode="json")
-            raw.update({"pollutants": [pollutant], "resolution": "hourly", "metrics": ["mean"], "limit": 10000, "operation": "aggregate"})
+            raw.update({
+                "pollutants": [pollutant], "resolution": "hourly", "metrics": ["mean"], "limit": 10000,
+                "operation": "aggregate",
+                "time_range": {"start": context_start.isoformat(), "end": issue.isoformat()},
+            })
             result = analytics.execute(QuerySpec.model_validate(raw))
             predicted = forecast_series(result["data"], horizon=request.horizon)
             pollutant_forecasts[pollutant] = predicted.values
