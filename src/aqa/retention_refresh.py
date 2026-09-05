@@ -53,7 +53,7 @@ def append_and_refresh_lakehouse(frame: pd.DataFrame, data_root: str | Path, *,
         _refresh_rollups(connection, lakehouse, dataset, bounds["hourly_start"], affected)
         _upsert_availability(lakehouse, bounds)
         refresh_value_availability(lakehouse, [dataset])
-        metadata_root = Path(__file__).resolve().parents[2] / "reference" / "AtmoBench" / "Metadata"
+        metadata_root = Path(__file__).resolve().parents[2] / "reference" / "UpstreamDataset" / "Metadata"
         refresh_station_dimension(lakehouse, metadata_root, [dataset])
         refresh_quality_cube(lakehouse, [dataset])
         refresh_area_daily(lakehouse, [dataset])
