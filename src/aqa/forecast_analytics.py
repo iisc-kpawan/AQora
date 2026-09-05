@@ -46,14 +46,14 @@ class ForecastAnalytics:
         text = question.casefold()
         return assessment.intent == "forecast" or any(term in text for term in ("forecast", "backtest", "mase"))
 
-    def execute(self, question: str, assessment: CapabilityAssessment) -> dict[str, Any]:
+    def execute(self, question: str, assessment: CapabilityAssessment, *, strict_quality: bool = True) -> dict[str, Any]:
         horizons = _comparison_horizons(question.casefold())
         if len(horizons) >= 2:
-            return self._multi_horizon_comparison(question, assessment, horizons)
-        return self._execute_single(question, assessment)
+            return self._multi_horizon_comparison(question, assessment, horizons, strict_quality=strict_quality)
+        return self._execute_single(question, assessment, strict_quality=strict_quality)
 
     def _execute_single(self, question: str, assessment: CapabilityAssessment,
-                        horizon_override: int | None = None) -> dict[str, Any]:
+                        horizon_override: int | None = None, strict_quality: bool = True) -> dict[str, Any]:
         started = time.perf_counter()
         text = question.casefold()
         selected = list(self.catalog.selected(assessment.supported_datasets))
@@ -126,7 +126,7 @@ class ForecastAnalytics:
                     rows, issue_times=local_issues, horizon=horizon, context_hours=context_hours,
                     maximum_filled_fraction=maximum_filled,
                     minimum_observed_target_fraction=minimum_targets,
-                    model=model, candidates=candidates,
+                    model=model, candidates=candidates, strict_input_quality=strict_quality,
                 )
             except ValidationError as exc:
                 raise DataUnavailableError(exc.message) from exc
@@ -143,6 +143,7 @@ class ForecastAnalytics:
                 minimum_observed_target_fraction=minimum_targets,
                 model=model, candidates=candidates,
                 interval_level=float(self.config["forecasting"].get("interval_level", .90)),
+                strict_input_quality=strict_quality,
             )
         except ValidationError as exc:
             raise DataUnavailableError(exc.message) from exc
@@ -181,10 +182,17 @@ class ForecastAnalytics:
                 answer += " The selected model is seasonal naive itself, so the selected and baseline forecasts are identical."
         if "interval" in text or "probab" in text:
             answer += f" The table includes a {forecast.interval_level:.0%} empirical prediction interval for every hour."
+        comparison = "above" if forecast.input_quality.get("exceeds_maximum_filled_fraction") else "below"
         answer += (
-            f" Input context was {forecast.input_quality['filled_fraction']:.1%} filled, below the configured "
-            f"{maximum_filled:.0%} maximum. Forecasts are estimates, not measurements."
+            f" Input context was {forecast.input_quality['filled_fraction']:.1%} filled, {comparison} the configured "
+            f"{maximum_filled:.0%} maximum."
         )
+        if forecast.input_quality.get("model_selection_target") == "policy_approved_filled_fallback":
+            answer += (
+                " No directly observed values were available in this window, so model selection was validated "
+                "against policy-approved filled values instead of real measurements."
+            )
+        answer += " Forecasts are estimates, not measurements."
         issue_utc_text = issue_utc.isoformat()
         return {
             "kind": "analytics",
@@ -224,9 +232,12 @@ class ForecastAnalytics:
         }
 
     def _multi_horizon_comparison(self, question: str, assessment: CapabilityAssessment,
-                                  horizons: list[int]) -> dict[str, Any]:
+                                  horizons: list[int], *, strict_quality: bool = True) -> dict[str, Any]:
         started = time.perf_counter()
-        results = [self._execute_single(question, assessment, horizon_override=horizon) for horizon in horizons]
+        results = [
+            self._execute_single(question, assessment, horizon_override=horizon, strict_quality=strict_quality)
+            for horizon in horizons
+        ]
         rows = []
         for horizon, result in zip(horizons, results):
             values = result["data"]
@@ -391,11 +402,29 @@ def _rolling_result(backtest: dict, *, item, location: str, pollutant: str, unit
             "unit": unit,
         })
     metrics = backtest["metrics"]; baseline = backtest["baseline_metrics"]
+    exceeded_origins = [
+        origin for origin in backtest["origins"]
+        if (origin["forecast"].input_quality or {}).get("exceeds_maximum_filled_fraction")
+    ]
+    fallback_origins = [
+        origin for origin in backtest["origins"]
+        if (origin["forecast"].input_quality or {}).get("model_selection_target") == "policy_approved_filled_fallback"
+    ]
+    if exceeded_origins:
+        quality_note = (
+            f"{len(exceeded_origins)} of {backtest['origin_count']} origin(s) exceeded the configured "
+            f"{maximum_filled:.0%} maximum filled input fraction"
+        )
+        if fallback_origins:
+            quality_note += f", and {len(fallback_origins)} used filled values for model-selection validation because no directly observed values were available"
+        quality_note += "."
+    else:
+        quality_note = f"Every origin enforced the configured {maximum_filled:.0%} maximum filled input fraction."
     answer = (
         f"The {backtest['origin_count']}-origin {location} {pollutant} backtest has aggregate MAE {metrics['mae']:.2f}, "
         f"RMSE {metrics['rmse']:.2f}, MASE {_format_optional(metrics.get('mase'))}, sMAPE {metrics['smape']:.1f}%, and bias {metrics['bias']:.2f} {unit}. "
         f"It used {backtest['observed_target_count']} directly observed target hours; seasonal-naive MAE was {baseline['mae']:.2f}. "
-        f"Every origin enforced the configured {maximum_filled:.0%} maximum filled input fraction."
+        f"{quality_note}"
     )
     return {
         "kind": "analytics",

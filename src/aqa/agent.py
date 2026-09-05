@@ -271,7 +271,12 @@ class ConversationalAgent:
                 return limitation_result(question, assessment, self.config, extra_reason=exc.message)
         if self.forecast_analytics.should_handle(question, assessment):
             try:
-                return self.forecast_analytics.execute(question, assessment)
+                # Conversational/API forecasting should always produce an answer
+                # rather than hard-rejecting on data quality alone -- unlike the
+                # portfolio readiness audit and simulation experiments, which
+                # deliberately keep the strict default so their eligibility
+                # criteria stay meaningful.
+                return self.forecast_analytics.execute(question, assessment, strict_quality=False)
             except AQAError as exc:
                 return limitation_result(question, assessment, self.config, extra_reason=exc.message)
         if self.global_analytics.should_handle(question, assessment):
