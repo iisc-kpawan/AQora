@@ -67,6 +67,14 @@ relative variability, matched-season contrasts, paired-month year-over-year
 attribution, historical-percentile burden, and same-issue multi-horizon
 forecast comparison.
 
+Internal result payloads (for example an `analysis.operator` field such as
+`forecast_readiness_portfolio_v1`) carry short, versioned code-level labels for
+each analytical tool. These labels are development identifiers, not paper
+terminology: they may be renamed, split, or re-versioned as implementation
+continues, independent of how the same capability is described in the paper.
+This document and the paper always use the descriptive names; only raw API
+responses or logs expose the internal literals.
+
 ## Repository contents
 
 - `src/aqa/`: application, API, conversational planner, analytics, and UI
