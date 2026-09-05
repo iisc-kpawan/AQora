@@ -14,8 +14,8 @@ import httpx
 def load_questions(path: Path) -> list[str]:
     with path.open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
-    if not rows or set(rows[0]) != {"question"}:
-        raise ValueError("Benchmark must contain exactly one column named 'question'")
+    if not rows or "question" not in rows[0]:
+        raise ValueError("Benchmark must contain a column named 'question'")
     return [row["question"].strip() for row in rows if row["question"].strip()]
 
 
