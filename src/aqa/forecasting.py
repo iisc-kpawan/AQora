@@ -98,9 +98,22 @@ def forecast_at_issue(
     rows: Iterable[dict], *, issue_time: datetime, horizon: int = 24, context_hours: int = 168,
     maximum_filled_fraction: float = .20, minimum_observed_target_fraction: float = .75,
     model: str = "auto", candidates: tuple[str, ...] = ("seasonal_naive", "linear_trend", "tsfm_api"),
-    interval_level: float = .90,
+    interval_level: float = .90, strict_input_quality: bool = True,
 ) -> Forecast:
-    """Forecast one hourly series without using data after the issue time for training or model selection."""
+    """Forecast one hourly series without using data after the issue time for training or model selection.
+
+    strict_input_quality=True (the default, used for the paper's readiness
+    audits, portfolio backtests, and simulation experiments) hard-rejects a
+    context that is too filled or that lacks enough directly observed
+    validation targets, exactly as before. strict_input_quality=False (used
+    only by the conversational/API forecast entry point) never rejects for
+    those reasons -- it always produces a forecast, falling back to
+    validating candidate models against the policy-approved filled series
+    when there isn't enough directly observed ground truth, and discloses
+    both the filled fraction and which validation basis was actually used
+    in input_quality rather than silently treating a filled-data fallback
+    as equivalent to a real observed-value validation.
+    """
     if horizon < 1 or horizon > 720:
         raise ValidationError("Forecast horizon must be between 1 and 720 hours")
     if context_hours < 48:
@@ -119,7 +132,8 @@ def forecast_at_issue(
     valid_count = sum(row["valid_count"] for row in context)
     filled_count = sum(row["filled_count"] for row in context)
     filled_fraction = filled_count / valid_count if valid_count else 0.0
-    if filled_fraction > maximum_filled_fraction:
+    exceeds_maximum_filled_fraction = filled_fraction > maximum_filled_fraction
+    if strict_input_quality and exceeds_maximum_filled_fraction:
         raise ValidationError(
             f"Forecast input is {filled_fraction:.1%} filled, above the configured {maximum_filled_fraction:.1%} maximum"
         )
@@ -127,12 +141,22 @@ def forecast_at_issue(
     validation = min(horizon, 24, max(1, context_hours - 48))
     train = values[:-validation]
     validation_rows = context[-validation:]
-    validation_actual = np.asarray([
+    validation_observed = np.asarray([
         row["observed_mean"] if row["observed_mean"] is not None else np.nan for row in validation_rows
     ], dtype=float)
-    observed_mask = np.isfinite(validation_actual)
-    if observed_mask.sum() < math.ceil(validation * minimum_observed_target_fraction):
+    observed_mask = np.isfinite(validation_observed)
+    minimum_required = math.ceil(validation * minimum_observed_target_fraction)
+    if observed_mask.sum() >= minimum_required:
+        validation_actual, selection_mask = validation_observed, observed_mask
+        model_selection_target = "directly_observed_only"
+    elif strict_input_quality:
         raise ValidationError("Model selection does not have enough directly observed validation targets")
+    else:
+        validation_actual = np.asarray([row["mean"] for row in validation_rows], dtype=float)
+        selection_mask = np.isfinite(validation_actual)
+        model_selection_target = "policy_approved_filled_fallback"
+    if selection_mask.sum() == 0:
+        raise ValidationError("No valid (observed or filled) validation targets are available for model selection")
     scores: dict[str, float] = {}
     predictions: dict[str, np.ndarray] = {}
     for name in candidates:
@@ -141,17 +165,17 @@ def forecast_at_issue(
         try:
             predicted = MODELS[name](train, validation)
             predictions[name] = predicted
-            scores[name] = float(np.mean(np.abs(predicted[observed_mask] - validation_actual[observed_mask])))
+            scores[name] = float(np.mean(np.abs(predicted[selection_mask] - validation_actual[selection_mask])))
         except (ValidationError, httpx.HTTPError, ValueError, np.linalg.LinAlgError):
             continue
     if not scores:
-        raise ValidationError("No forecasting candidate produced an observed-target validation score")
+        raise ValidationError("No forecasting candidate produced a valid validation score")
     selected = min(scores, key=scores.get) if model == "auto" else model
     if selected not in MODELS or selected not in scores:
         raise ValidationError(f"Forecast model is unavailable or ineligible: {selected}")
     predicted = MODELS[selected](values, horizon)
     baseline = MODELS["seasonal_naive"](values, horizon)
-    validation_residuals = validation_actual[observed_mask] - predictions[selected][observed_mask]
+    validation_residuals = validation_actual[selection_mask] - predictions[selected][selection_mask]
     radius = float(np.quantile(np.abs(validation_residuals), interval_level, method="higher"))
     lower = np.maximum(predicted - radius, 0)
     upper = predicted + radius
@@ -186,7 +210,8 @@ def forecast_at_issue(
             "context_mean": float(np.mean(values)), "context_std": float(np.std(values)),
             "context_coefficient_of_variation": float(np.std(values) / np.mean(values)) if np.mean(values) else None,
             "maximum_filled_fraction": maximum_filled_fraction,
-            "model_selection_target": "directly_observed_only",
+            "exceeds_maximum_filled_fraction": exceeds_maximum_filled_fraction,
+            "model_selection_target": model_selection_target,
         },
         interval_level,
     )
@@ -196,6 +221,7 @@ def rolling_backtest(
     rows: Iterable[dict], *, issue_times: Iterable[datetime], horizon: int = 24, context_hours: int = 168,
     maximum_filled_fraction: float = .20, minimum_observed_target_fraction: float = .75,
     model: str = "auto", candidates: tuple[str, ...] = ("seasonal_naive", "linear_trend", "tsfm_api"),
+    strict_input_quality: bool = True,
 ) -> dict:
     """Run leakage-safe rolling origins and aggregate observed-target errors."""
     origins = []
@@ -204,7 +230,7 @@ def rolling_backtest(
             rows, issue_time=issue_time, horizon=horizon, context_hours=context_hours,
             maximum_filled_fraction=maximum_filled_fraction,
             minimum_observed_target_fraction=minimum_observed_target_fraction,
-            model=model, candidates=candidates,
+            model=model, candidates=candidates, strict_input_quality=strict_input_quality,
         )
         origins.append({"issue_time": issue_time.isoformat(), "forecast": result})
     selected_rows = []
