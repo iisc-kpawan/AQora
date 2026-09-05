@@ -191,6 +191,8 @@ def assess_question(question: str, config: dict | None = None) -> CapabilityAsse
                 continue
             if method == "historical observed/imputed split" and _provenance_policy_supported(text, assessment.intent):
                 continue
+            if method == "historical observed/imputed split" and _aqi_provenance_policy_supported(text):
+                continue
             if method == "compound provenance trend sensitivity" and _provenance_policy_supported(text, assessment.intent):
                 continue
             if method in {"compound data-quality uncertainty", "multi-constraint ranking or sensitivity", "simulation/sensitivity experiment"} and _provenance_policy_supported(text, assessment.intent):
@@ -353,6 +355,21 @@ def _changepoint_detection_supported(text: str) -> bool:
         return False
     return not any(term in text for term in (
         "regime", "seven primary", "each country", "every country", "all countries", "primary countries",
+    ))
+
+
+def _aqi_provenance_policy_supported(text: str) -> bool:
+    """A single-area daily-AQI-category-under-provenance-policy comparison (AQIAnalytics).
+
+    Excludes the two confirmed harder compound variants: the coverage-
+    threshold/station-aggregation robustness sweep, and the flexible
+    "selected high-burden cities" cohort during severe episodes -- neither
+    of those is built, only the plain single-city comparison is.
+    """
+    if not ("aqi" in text and "observed" in text and any(term in text for term in ("filled", "imputed"))):
+        return False
+    return not any(term in text for term in (
+        "coverage threshold", "aggregation rule", "high-burden cities", "severe episodes",
     ))
 
 
