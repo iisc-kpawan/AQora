@@ -483,8 +483,18 @@ def requested_period_end(question: str) -> datetime | None:
     text = question.casefold()
     dates = []
     month_pattern = "|".join(sorted(MONTHS, key=len, reverse=True))
-    for match in re.finditer(rf"\b(\d{{1,2}})\s+({month_pattern})\s+(20\d{{2}})\b", text):
-        dates.append(datetime(int(match.group(3)), MONTHS[match.group(2)], int(match.group(1)), 23, 59, 59))
+    for match in re.finditer(rf"\b(\d{{1,2}})\s+({month_pattern})\s+(20\d{{2}})(?:\s+(\d{{1,2}}):(\d{{2}}))?\b", text):
+        year, month, day = int(match.group(3)), MONTHS[match.group(2)], int(match.group(1))
+        if match.group(4):
+            # An explicit time (e.g. a forecast issue timestamp like "31 May
+            # 2026 23:00") means exactly that instant, not end-of-day -- the
+            # dataset's own available_end is stored the same way (on the
+            # hour, never at 23:59:59), so defaulting to end-of-day here
+            # would falsely reject a request for data through the exact
+            # moment it's actually available.
+            dates.append(datetime(year, month, day, int(match.group(4)), int(match.group(5))))
+        else:
+            dates.append(datetime(year, month, day, 23, 59, 59))
     for match in re.finditer(rf"(?<!\d )\b({month_pattern})\s+(20\d{{2}})\b", text):
         month, year = MONTHS[match.group(1)], int(match.group(2))
         dates.append(datetime(year, month, calendar.monthrange(year, month)[1], 23, 59, 59))
