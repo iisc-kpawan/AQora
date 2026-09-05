@@ -38,6 +38,7 @@ ADVANCED_METHODS = {
     "AQI category-burden comparison": r"aqi category burden|classification as high-burden|using only dates for which both cities",
     "configured guideline comparison": r"two different configured .*guideline",
     "ingestion reliability decomposition": r"ingestion success|late-arrival recovery|delayed, missing, invalid",
+    "gap-length statistics": r"\bgap[- ]lengths?\b|\bgap\s+statistics\b|\blongest\b.{0,30}\bgap\b",
     "forecast evaluation experiment": r"forecast-model ranking|forecast accuracy across|rolling[- ]origin|backtests? for eligible|context gaps|fails? to beat seasonal naive|same issue time|forecasting evaluation under",
     "compound year-over-year attribution": r"year over year.*three months|year-over-year.*contributing|pm2\.5 improved.*o3 worsened|worsening pm2\.5 and o3",
     "temporal completeness cohort": r"complete coverage for all six|valid-hour coverage.*first/last|minimum history, continuity, coverage",
