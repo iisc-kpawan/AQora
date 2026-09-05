@@ -1,4 +1,4 @@
-from aqa.agent import _expected_dataset_from_text, _pollutants_from_text, rule_based_plan
+from aqa.agent import _confident_time_range_from_question, _expected_dataset_from_text, _pollutants_from_text, rule_based_plan
 
 
 def test_pollutants_from_text_recognizes_ozone_synonym():
@@ -94,3 +94,15 @@ def test_rule_planner_preserves_exact_day_and_month_ranges():
     months = rule_based_plan("Compare PM2.5 in Delhi from August 2024 to July 2025")
     assert months.time_range.start.isoformat() == "2024-08-01T00:00:00"
     assert months.time_range.end.isoformat() == "2025-07-31T23:59:59"
+
+
+def test_confident_time_range_respects_an_explicit_forecast_issue_time():
+    # Regression: a date immediately followed by an explicit time used to be
+    # silently pushed to end-of-day (23:59:59), one minute later than any
+    # dataset's available_end could ever be (always stored on the hour),
+    # so a forecast issue-time question naming the exact currently-available
+    # moment always resolved to an end past what's actually loaded.
+    result = _confident_time_range_from_question(
+        "forecast delhi pm25 for the next 24 hours using data through 31 may 2026 23:00."
+    )
+    assert result == {"start": "2026-05-31T23:00:00", "end": "2026-05-31T23:00:00"}
