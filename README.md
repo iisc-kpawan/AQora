@@ -20,11 +20,16 @@ described below.
 
 Known limitations, all confirmed against the raw ingested data rather than
 assumed:
-- The India (CPCB) source has been unreachable from the hosting server since
-  2026-05-31, so its data is frozen at that date. Questions that name an India
-  date after 2026-05-31 (as in a few of the paper's Table 2 questions) will
-  return an explicit "outside loaded scope" response rather than a computed
-  answer.
+- Ingestion and development are ongoing, and this deployment reflects a
+  snapshot rather than a live-updating feed for most sources: 49 of the 55
+  configured datasets, including India (CPCB), are frozen at 2026-05-31, the
+  point at which this evaluation snapshot was taken. Six datasets kept
+  ingesting past that point and are current through 2026-08-28: China
+  (CNEMC), the United States (EPA), Mexico (SINAICA), the United Kingdom
+  (AURN), Germany (EEA_DE), and France (EEA_FR). Questions that name any
+  other country and a date after 2026-05-31 (as in a few of the paper's
+  Table 2 questions about India) will return an explicit "outside loaded
+  scope" response rather than a computed answer.
 - The United States (EPA) O3 series has no valid values at all for June,
   July, or August 2026 (every row is flagged `missing_sparse_series`).
   Questions about US O3 in that window will likewise return an explicit
